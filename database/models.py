@@ -105,7 +105,7 @@ def init_db():
         ('acronimo', 'TEXT'), ('industria', 'TEXT'), ('sitio_web', 'TEXT'),
         ('direccion_fiscal', 'TEXT'), ('direccion', 'TEXT'), ('ciudad', 'TEXT'), ('estado', 'TEXT'),
         ('pais', "TEXT DEFAULT 'México'"), ('notas', 'TEXT'), ('activo', 'INTEGER DEFAULT 1'),
-        ('contacto', 'TEXT'), ('rfc', 'TEXT'), ('logo_path', 'TEXT'),
+        ('contacto', 'TEXT'), ('email', 'TEXT'), ('telefono', 'TEXT'), ('rfc', 'TEXT'), ('logo_path', 'TEXT'),
     ]:
         try:
             cursor.execute(f"ALTER TABLE clientes ADD COLUMN {col} {typedef}")

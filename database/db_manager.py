@@ -153,10 +153,24 @@ def seed_initial_catalogs(excel_folder_path=None):
         ("J&D AUTOMATION INTERNO", "Administración", "", "", "", "México"),
     ]
     for c in clientes_base:
-        cursor.execute("""
-            INSERT OR IGNORE INTO clientes (nombre, contacto, email, telefono, rfc, direccion)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, c)
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO clientes (nombre, contacto, email, telefono, rfc, direccion_fiscal)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, c)
+        except Exception:
+            try:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO clientes (nombre, contacto, email, telefono, rfc, direccion)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, c)
+            except Exception:
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO clientes (nombre, contacto) VALUES (?, ?)
+                    """, (c[0], c[1]))
+                except Exception:
+                    pass
 
     if excel_folder_path and os.path.exists(excel_folder_path):
         files = [f for f in os.listdir(excel_folder_path) if f.endswith('.xlsx') and not f.startswith('~$')]

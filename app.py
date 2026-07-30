@@ -43,8 +43,11 @@ if os.path.exists(FAVICON_PATH):
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # ─── INICIALIZAR BASE DE DATOS Y DATOS SEMILLA ───
-init_db()
-seed_initial_catalogs()
+try:
+    init_db()
+    seed_initial_catalogs()
+except Exception as _e:
+    pass
 
 # ─── SIDEBAR CORPORATIVO J&D ───
 with st.sidebar:
