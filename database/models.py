@@ -89,6 +89,7 @@ def init_db():
         industria TEXT,
         sitio_web TEXT,
         direccion_fiscal TEXT,
+        direccion TEXT,
         ciudad TEXT,
         estado TEXT,
         pais TEXT DEFAULT 'México',
@@ -102,7 +103,7 @@ def init_db():
     # Agregar columnas nuevas si la tabla ya existía (migración segura con commit inmediato)
     for col, typedef in [
         ('acronimo', 'TEXT'), ('industria', 'TEXT'), ('sitio_web', 'TEXT'),
-        ('direccion_fiscal', 'TEXT'), ('ciudad', 'TEXT'), ('estado', 'TEXT'),
+        ('direccion_fiscal', 'TEXT'), ('direccion', 'TEXT'), ('ciudad', 'TEXT'), ('estado', 'TEXT'),
         ('pais', "TEXT DEFAULT 'México'"), ('notas', 'TEXT'), ('activo', 'INTEGER DEFAULT 1'),
         ('contacto', 'TEXT'), ('rfc', 'TEXT'), ('logo_path', 'TEXT'),
     ]:
