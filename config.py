@@ -33,6 +33,31 @@ CUSTOM_CSS = f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;900&display=swap');
 
+    /* ─── OCULTAR FRANJA BLANCA SUPERIOR, MENÚ DE 3 PUNTOS, BOTÓN FORK Y FOOTER ─── */
+    header[data-testid="stHeader"],
+    div[data-testid="stHeader"],
+    .stAppHeader,
+    [data-testid="stAppHeader"],
+    #MainMenu,
+    footer,
+    header,
+    div[data-testid="stStatusWidget"],
+    .stToolbar,
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stActionButtonIcon"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0px !important;
+        padding: 0px !important;
+        margin: 0px !important;
+    }
+
+    /* Reducir espacio superior vacante de la página principal */
+    .block-container, [data-testid="stMainBlockContainer"] {
+        padding-top: 1rem !important;
+    }
+
     /* ─── TIPOGRAFÍA CORPORATIVA MONTSERRAT ─── */
     html, body, .stWidget, .stMarkdown, p, li, label, input, button, span, div {{
         font-family: 'Montserrat', 'Inter', sans-serif !important;
