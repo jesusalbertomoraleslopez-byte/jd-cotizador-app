@@ -49,6 +49,8 @@ try:
 except Exception as _e:
     pass
 
+from modules.auth import render_login_sidebar
+
 # ─── SIDEBAR CORPORATIVO J&D ───
 with st.sidebar:
     if os.path.exists(LOGO_ORANGE):
@@ -80,6 +82,9 @@ with st.sidebar:
         ],
         label_visibility="collapsed"
     )
+
+    # Widget de Autenticación y Control de Roles
+    render_login_sidebar()
 
     st.markdown(f"""
     <div style="border-top: 1px solid #5A6478; margin: 20px 0 12px 0;"></div>

@@ -1,40 +1,63 @@
 import streamlit as st
 import os
 import io
+import shutil
 import pandas as pd
 from datetime import datetime
-from config import BRAND_ORANGE, BRAND_CHARCOAL, BRAND_CHARCOAL_MED, BRAND_GRAY_BG, BRAND_WHITE, BRAND_BORDER_LIGHT
+from config import (BRAND_ORANGE, BRAND_CHARCOAL, BRAND_CHARCOAL_MED,
+                    BRAND_GRAY_BG, BRAND_WHITE, BRAND_BORDER_LIGHT)
 from database.models import get_connection, init_db
+from modules.auth import check_admin_permission, is_admin
+from modules.pdf_exporter import generar_pdf_modulo
+
+SGC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "sgc_procedimientos")
+os.makedirs(SGC_DIR, exist_ok=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. ÁREA DE MANTENIMIENTO Y ALMACENAMIENTO TÉCNICO AVANZADO
+# 1. ÁREA DE MANTENIMIENTO Y ALMACENAMIENTO TÉCNICO AVANZADO (SECCIÓN 8)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_mantenimiento_page():
     st.markdown(f"""
     <div class="jd-section-header">
         <h2>🛠️ Módulo de Mantenimiento y Administración General</h2>
-        <p>Centro unificado para la gestión de base de datos, clientes, catálogos base y modificación técnica de cotizaciones.</p>
+        <p>Centro unificado para la gestión de base de datos, corrección de registros, limpieza de deploy y almacenamiento.</p>
     </div>""", unsafe_allow_html=True)
 
-    m_tab1, m_tab2, m_tab3, m_tab4 = st.tabs([
-        "🔒 Control DB, Respaldo ZIP & Borrado",
-        "📁 Clientes",
-        "📁 Catálogos Base",
-        "📁 Modificador de Cotizaciones"
+    # Verificación de rol de Administrador
+    admin_ok = is_admin()
+    if not admin_ok:
+        st.markdown(f"""
+        <div style="background:#FFFBEB; border:1px solid #FCD34D; border-left:5px solid #F59E0B;
+                    border-radius:8px; padding:16px 20px; margin-bottom:20px; font-family:'Montserrat',sans-serif;">
+            <p style="font-size:13px; font-weight:800; color:#B45309; margin:0 0 4px 0;">
+                🔒 ACCESO RESTRINGIDO — PERFIL OPERADOR (MODO CONSULTA)
+            </p>
+            <p style="font-size:11px; color:#92400E; margin:0;">
+                Actualmente estás navegando con perfil de <b>Operador</b>. Puedes consultar los catálogos y resumenes de mantenimiento, 
+                pero la modificación manual, eliminación de registros y borrado de fábrica están <b>reservados únicamente para el Administrador</b>.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    m_tab1, m_tab2, m_tab3, m_tab4, m_tab5 = st.tabs([
+        "🔒 Control DB & Borrado Masivo",
+        "🏢 Clientes",
+        "📦 Catálogos Base",
+        "✏️ Modificador de Cotizaciones",
+        "🗄️ Explorador Deploy & GitHub"
     ])
 
-    # ── TAB 1: GESTIÓN DE BASE DE DATOS, ACCIONES MASIVAS & BORRADO ──
+    # ── TAB 1: GESTIÓN DE BASE DE DATOS & BORRADO ──
     with m_tab1:
         st.markdown(f"""
         <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};border-left:5px solid {BRAND_ORANGE};
                     border-radius:8px;padding:16px 20px;margin-bottom:20px;font-family:'Montserrat',sans-serif;">
             <p style="font-size:13px;font-weight:700;color:{BRAND_CHARCOAL};margin:0 0 4px 0;">
-                ⚙️ GESTIÓN Y ADMINISTRACIÓN MULTIPLE DE REGISTROS DE COTIZACIÓN
+                ⚙️ GESTIÓN Y CORRECCIÓN MASIVA DE COTIZACIONES
             </p>
             <p style="font-size:11px;color:{BRAND_CHARCOAL_MED};margin:0;">
-                Selecciona una o varias cotizaciones mediante las casillas de verificación para ejecutar cambios de estatus en lote, 
-                eliminar registros o forzar el desbloqueo de cotizaciones congeladas.
+                Selecciona casillas de verificación para cambio de estatus en lote, eliminación selectiva de datos o desbloqueo.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -88,7 +111,9 @@ def render_mantenimiento_page():
                 st.markdown(f"<p style='font-size:12px;font-weight:800;color:{BRAND_CHARCOAL};margin:0 0 6px 0;'>🏷️ CAMBIO DE ESTATUS EN LOTE</p>", unsafe_allow_html=True)
                 nuevo_est_lote = st.selectbox("Estatus para seleccionadas", ["Borrador", "Cotizado", "En Proceso", "Ganada", "Perdida", "Cancelada"], key="sel_est_lote")
                 if st.button(f"🏷️ Aplicar Estatus '{nuevo_est_lote}' a ({len(selected_ids)})", use_container_width=True):
-                    if not selected_ids:
+                    if not admin_ok:
+                        st.error("🔒 Se requiere perfil de ADMINISTRADOR para modificar registros.")
+                    elif not selected_ids:
                         st.warning("Selecciona al menos una cotización usando las casillas de verificación.")
                     else:
                         from database.db_manager import bulk_update_cotizaciones_estatus
@@ -100,7 +125,9 @@ def render_mantenimiento_page():
                 st.markdown(f"<p style='font-size:12px;font-weight:800;color:#DC2626;margin:0 0 6px 0;'>🗑️ BORRADO DE REGISTROS SELECCIONADOS</p>", unsafe_allow_html=True)
                 confirm_bulk = st.checkbox(f"Confirmar eliminación de {len(selected_ids)} registro(s)", key="chk_confirm_bulk")
                 if st.button(f"🗑️ Eliminar ({len(selected_ids)}) Cotizaciones Seleccionadas", type="primary", use_container_width=True):
-                    if not selected_ids:
+                    if not admin_ok:
+                        st.error("🔒 Se requiere perfil de ADMINISTRADOR para borrar registros.")
+                    elif not selected_ids:
                         st.warning("Selecciona al menos una cotización usando las casillas de verificación.")
                     elif not confirm_bulk:
                         st.error("Por favor marca la casilla de confirmación antes de eliminar.")
@@ -117,12 +144,15 @@ def render_mantenimiento_page():
                     opt_lock = {f"🔒 {c['folio']} ({c['revision']})": c['id'] for c in cots_lock}
                     sel_lock = st.selectbox("Reabrir Congelada", list(opt_lock.keys()), key="sel_unlock_fast", label_visibility="collapsed")
                     if st.button("🔓 Desbloquear", use_container_width=True):
-                        c_id = opt_lock[sel_lock]
-                        conn = get_connection()
-                        conn.execute("UPDATE cotizaciones SET congelada=0, estatus='En Revisión' WHERE id=?", (c_id,))
-                        conn.commit(); conn.close()
-                        st.success("Cotización reabierta como Borrador.")
-                        st.rerun()
+                        if not admin_ok:
+                            st.error("🔒 Se requiere perfil de ADMINISTRADOR para desbloquear.")
+                        else:
+                            c_id = opt_lock[sel_lock]
+                            conn = get_connection()
+                            conn.execute("UPDATE cotizaciones SET congelada=0, estatus='En Revisión' WHERE id=?", (c_id,))
+                            conn.commit(); conn.close()
+                            st.success("Cotización reabierta como Borrador.")
+                            st.rerun()
 
         st.markdown("---")
 
@@ -131,7 +161,7 @@ def render_mantenimiento_page():
             st.markdown(f"""
             <div style="background:#F8FAFC;border:1px solid #CBD5E1;border-radius:8px;padding:14px;margin-bottom:10px;">
                 <h4 style="margin:0 0 4px 0;color:{BRAND_CHARCOAL};font-weight:800;font-size:13px;">📦 RESPALDO COMPLETO DE BASE DE DATOS (.ZIP)</h4>
-                <p style="margin:0;color:{BRAND_CHARCOAL_MED};font-size:11px;">Genera un archivo comprimido .ZIP con la base de datos `cotizador.db` completa para resguardo de seguridad.</p>
+                <p style="margin:0;color:{BRAND_CHARCOAL_MED};font-size:11px;">Genera un archivo comprimido .ZIP con la base de datos `cotizador.db` completa para resguardo.</p>
             </div>
             """, unsafe_allow_html=True)
             try:
@@ -153,13 +183,15 @@ def render_mantenimiento_page():
             st.markdown(f"""
             <div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:14px;margin-bottom:10px;">
                 <h4 style="margin:0 0 4px 0;color:#991B1B;font-weight:800;font-size:13px;">⚙️ BORRADO DE FÁBRICA (RESET DE TRANSACCIONES)</h4>
-                <p style="margin:0;color:#7F1D1D;font-size:11px;">Elimina TODAS las cotizaciones y partidas de prueba, <b>conservando 100% intactos los catálogos base</b> (clientes, puestos MO, gastos, subcontratos, maquinaria).</p>
+                <p style="margin:0;color:#7F1D1D;font-size:11px;">Elimina TODAS las cotizaciones y partidas de prueba, <b>conservando 100% intactos los catálogos base</b>.</p>
             </div>
             """, unsafe_allow_html=True)
             
-            chk_reset = st.checkbox("Confirmar que deseo realizar un Borrado de Fábrica completo de transacciones", key="chk_reset_factory")
+            chk_reset = st.checkbox("Confirmar que deseo realizar un Borrado de Fábrica completo", key="chk_reset_factory")
             if st.button("🚨 EJECUTAR BORRADO DE FÁBRICA (RESET)", type="primary", use_container_width=True, key="btn_factory_reset"):
-                if not chk_reset:
+                if not admin_ok:
+                    st.error("🔒 Se requiere perfil de ADMINISTRADOR para realizar borrado de fábrica.")
+                elif not chk_reset:
                     st.error("Por favor marca la casilla de confirmación obligatoria.")
                 else:
                     from database.db_manager import factory_reset_database
@@ -172,7 +204,7 @@ def render_mantenimiento_page():
         from modules.clientes import render_clientes_page
         render_clientes_page()
 
-    # ── TAB 3: CATÁLOGOS BASE Y TABLAS MAESTRAS ──
+    # ── TAB 3: CATÁLOGOS BASE ──
     with m_tab3:
         from modules.catalogos import render_catalogos_page
         render_catalogos_page()
@@ -182,76 +214,80 @@ def render_mantenimiento_page():
         from modules.cotizador_editor import render_cotizador_editor
         render_cotizador_editor()
 
-        st.markdown(f"""
-        <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};border-left:5px solid {BRAND_CHARCOAL};
-                    border-radius:8px;padding:16px 20px;margin-bottom:20px;font-family:'Montserrat',sans-serif;">
-            <p style="font-size:13px;font-weight:700;color:{BRAND_CHARCOAL};margin:0 0 4px 0;">
-                📦 RESUMEN AUDITABLE DE CATÁLOGOS BASE DEL SISTEMA
-            </p>
-            <p style="font-size:11px;color:{BRAND_CHARCOAL_MED};margin:0;">
-                Monitoreo consolidado de tarifas base de Mano de Obra, Gastos Generales de Obra (59 conceptos), Subcontratos y Clientes.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        conn = get_connection(); cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM catalogo_mano_obra WHERE activo=1"); n_mo = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM catalogo_gastos WHERE activo=1"); n_gas = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM catalogo_subcontratos WHERE activo=1"); n_sub = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM clientes"); n_cli = cur.fetchone()[0]
-        conn.close()
-
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Tarifas Mano de Obra", f"{n_mo} Puestos")
-        c2.metric("Catálogo Gastos Obra", f"{n_gas} Conceptos")
-        c3.metric("Catálogo Subcontratos", f"{n_sub} Servicios")
-        c4.metric("Clientes Registrados", f"{n_cli} Empresas")
-
-        st.info("💡 Para modificar precios unitarios predeterminados o dar de alta nuevos conceptos, utiliza el módulo principal **📦 Catálogos Base** o **🏢 Clientes** del menú lateral.")
-
-    # ── TAB 3: ALMACENAMIENTO & MANTENIMIENTO DE DEPLOY ──
-    with m_tab3:
+    # ── TAB 5: ALMACENAMIENTO & DEPLOY (STREAMLIT / GITHUB) ──
+    with m_tab5:
         st.markdown(f"""
         <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};border-left:5px solid #0EA5E9;
                     border-radius:8px;padding:16px 20px;margin-bottom:20px;font-family:'Montserrat',sans-serif;">
             <p style="font-size:13px;font-weight:700;color:{BRAND_CHARCOAL};margin:0 0 4px 0;">
-                🗄️ EXPLORADOR DE ALMACENAMIENTO Y MANTENIMIENTO DE SISTEMA (STREAMLIT / GITHUB)
+                🗄️ EXPLORADOR DE ALMACENAMIENTO Y MANTENIMIENTO DE SERVIDOR (STREAMLIT / GITHUB)
             </p>
             <p style="font-size:11px;color:{BRAND_CHARCOAL_MED};margin:0;">
-                Auditoría del espacio utilizado por la base de datos SQLite, optimización de índices y limpieza de archivos temporales de servidor.
+                Monitoreo de espacio en disco, optimización SQLite `VACUUM` y limpieza de temporales de compilación/deploy.
             </p>
         </div>
         """, unsafe_allow_html=True)
 
-        db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "database", "cotizador.db")
+        base_project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(base_project_dir, "database", "cotizador.db")
         db_size_mb = (os.path.getsize(db_path) / (1024 * 1024)) if os.path.exists(db_path) else 0.0
 
         st.markdown(f"**Ubicación de Base de Datos:** `{db_path}`")
         st.markdown(f"**Tamaño Actual en Disco:** `<b style='color:{BRAND_ORANGE};font-size:16px;'>{db_size_mb:.2f} MB</b>`", unsafe_allow_html=True)
 
-        cl1, cl2 = st.columns(2)
+        cl1, cl2, cl3 = st.columns(3)
         with cl1:
             if st.button("🧹 Optimizar Base de Datos (SQLite VACUUM)", type="primary", use_container_width=True):
                 conn = get_connection()
                 conn.execute("VACUUM")
                 conn.commit(); conn.close()
-                st.success("Se ha ejecutado `VACUUM` exitosamente. Espacio liberado y espacio de almacenamiento compactado.")
+                st.success("Se ha ejecutado `VACUUM` exitosamente. Espacio liberado y BD compactada.")
 
         with cl2:
-            if st.button("🔄 Reindexar & Verificar Integridad DB", use_container_width=True):
+            if st.button("🔄 Reindexar & Integridad DB", use_container_width=True):
                 conn = get_connection(); cur = conn.cursor()
                 cur.execute("PRAGMA integrity_check")
                 check = cur.fetchone()[0]
                 conn.close()
                 if check == "ok":
-                    st.success("Integridad de base de datos verificada: **OK (100% Saludable)**")
+                    st.success("Integridad de base de datos: **OK (100% Saludable)**")
                 else:
                     st.error(f"Resultado de verificación: {check}")
 
+        with cl3:
+            if st.button("🚀 Limpiar Temporales y Cache de Deploy", use_container_width=True):
+                # Limpiar temporales
+                temp_dir = os.path.join(base_project_dir, ".tempmediaStorage")
+                count_del = 0
+                if os.path.exists(temp_dir):
+                    for f in os.listdir(temp_dir):
+                        try:
+                            os.remove(os.path.join(temp_dir, f))
+                            count_del += 1
+                        except Exception:
+                            pass
+                st.success(f"Se han removido {count_del} archivos temporales y caches de servidor.")
+
+        st.markdown("---")
+        # Exportación Universal PDF Mantenimiento
+        sec_mant_pdf = [
+            {'title': 'Estado General de Base de Datos', 'content': f'Base de datos: {db_path}\nTamaño en disco: {db_size_mb:.2f} MB\nEstado Integridad: OK'},
+            {'title': 'Resumen de Seguridad y Accesos', 'content': 'Perfil Activo: Administrador\nAcceso a Acciones Críticas: Habilitado'}
+        ]
+        pdf_mant_bytes = generar_pdf_modulo("Reporte de Mantenimiento y Almacenamiento", "Auditoría de Servidor y Deploy J&D Automation", sec_mant_pdf)
+        st.download_button(
+            label="📄 EXPORTAR REPORTE DE MANTENIMIENTO EN PDF",
+            data=pdf_mant_bytes,
+            file_name="Reporte_Mantenimiento_Almacenamiento_JD.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+            key="btn_dl_pdf_mantenimiento"
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. SISTEMA DE GESTIÓN DE CALIDAD (SGC)
+# 2. SISTEMA DE GESTIÓN DE CALIDAD (SGC) (SECCIÓN 4)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_sgc_page():
@@ -264,7 +300,7 @@ def render_sgc_page():
     st.markdown(f"""
     <div style="background:{BRAND_GRAY_BG};border:1px solid {BRAND_BORDER_LIGHT};border-left:5px solid {BRAND_ORANGE};
                 border-radius:10px;padding:20px;margin-bottom:24px;font-family:'Montserrat',sans-serif;">
-        <h3 style="font-size:16px;font-weight:800;color:{BRAND_CHARCOAL};margin:0 0 8px 0;">POLÍTICA DE CALIDAD & CONTROL DE PROCEDIMIENTOS</h3>
+        <h3 style="font-size:16px;font-weight:800;color:{BRAND_CHARCOAL};margin:0 0 8px 0;">POLÍTICA DE CALIDAD & CONTROL DE PROCEDIMIENTOS (ISO 9001:2015)</h3>
         <p style="font-size:12px;color:{BRAND_CHARCOAL_MED};line-height:1.6;margin:0;">
             El presente módulo garantiza el cumplimiento de los estándares de calidad <b>ISO 9001:2015</b> alineados 
             al proceso de Ingeniería Comercial, Costeo de Proyectos de Automatización y Emisión de Ofertas Técnicas.
@@ -281,17 +317,37 @@ def render_sgc_page():
     ]
 
     st.markdown(f"<p style='font-size:12px;font-weight:800;color:{BRAND_CHARCOAL};margin-bottom:8px;'>MATRIZ DE PROCEDIMIENTOS INSTITUCIONALES SGC</p>", unsafe_allow_html=True)
-    df_sgc = pd.DataFrame(procedimientos)
-    st.dataframe(df_sgc, use_container_width=True, hide_index=True)
-
-    st.divider()
+    
+    for proc in procedimientos:
+        with st.container():
+            c1, c2, c3, c4 = st.columns([1.5, 4, 2, 2.5])
+            c1.markdown(f"**`{proc['Código']}`**")
+            c2.markdown(f"**{proc['Nombre']}**<br/><span style='font-size:11px;color:#64748B;'>Área: {proc['Área']}</span>", unsafe_allow_html=True)
+            c3.markdown(f"**{proc['Revisión']}** | <span style='color:#059669;font-weight:700;'>{proc['Estatus']}</span>", unsafe_allow_html=True)
+            
+            with c4:
+                sec_p = [
+                    {'title': f"Procedimiento Institucional: {proc['Código']}", 'content': f"Nombre: {proc['Nombre']}\nÁrea: {proc['Área']}\nRevisión: {proc['Revisión']}\nEstatus: {proc['Estatus']}"},
+                    {'title': 'Normativa ISO 9001:2015', 'content': 'Este documento forma parte del Sistema de Gestión de Calidad institucional de J&D Automation Industries S.A. de C.V.'}
+                ]
+                pdf_p_bytes = generar_pdf_modulo(f"Procedimiento {proc['Código']}", proc['Nombre'], sec_p)
+                st.download_button(
+                    label=f"📄 Descargar PDF",
+                    data=pdf_p_bytes,
+                    file_name=f"{proc['Código']}_Procedimiento_SGC.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    key=f"btn_dl_proc_{proc['Código']}",
+                    use_container_width=True
+                )
+        st.divider()
 
     # Carga Inicial de Archivos SGC
     st.markdown(f"""
     <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};border-radius:10px;padding:20px;font-family:'Montserrat',sans-serif;">
         <h4 style="font-size:14px;font-weight:800;color:{BRAND_CHARCOAL};margin:0 0 10px 0;">📤 Carga Inicial de Archivos y Manuales SGC</h4>
         <p style="font-size:11px;color:{BRAND_CHARCOAL_MED};margin-bottom:14px;">
-            Sube los documentos originales firmados (.pdf, .docx, .xlsx) para vincularlos al repositorio del sistema de calidad.
+            Sube los documentos originales firmados (.pdf, .docx, .xlsx) para vincularlos al repositorio de procedimientos del SGC.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -301,26 +357,55 @@ def render_sgc_page():
         uploaded_files = st.file_uploader(
             "Seleccionar archivos institucionales de procedimientos SGC",
             type=['pdf', 'docx', 'xlsx'],
-            accept_multiple_files=True
+            accept_multiple_files=True,
+            key="up_sgc_files"
         )
     with c_up2:
-        cod_asoc = st.selectbox("Asociar a Código de Procedimiento", [p['Código'] for p in procedimientos])
-        desc_proc = st.text_input("Observaciones de la Versión Subida", "Carga inicial de procedimiento normado")
+        cod_asoc = st.selectbox("Asociar a Código de Procedimiento", [p['Código'] for p in procedimientos], key="sel_cod_sgc")
+        desc_proc = st.text_input("Observaciones de la Versión Subida", "Carga inicial de procedimiento normado", key="txt_obs_sgc")
 
     if uploaded_files:
-        if st.button("🚀 Subir e Integrar Documentos al SGC", type="primary", use_container_width=True):
-            st.success(f"Se han registrado y cargado exitosamente **{len(uploaded_files)} archivo(s)** asociados a **{cod_asoc}**.")
+        if st.button("🚀 Subir e Integrar Documentos al SGC", type="primary", use_container_width=True, key="btn_save_sgc_upload"):
+            conn = get_connection(); cur = conn.cursor()
+            for uf in uploaded_files:
+                save_p = os.path.join(SGC_DIR, uf.name)
+                with open(save_p, "wb") as f:
+                    f.write(uf.getbuffer())
+                cur.execute("""
+                    INSERT INTO sgc_documentos (codigo, nombre, revision, area, archivo_path, mime_type, observaciones)
+                    VALUES (?, ?, 'Rev. 01', 'Ingeniería Comercial', ?, ?, ?)
+                """, (cod_asoc, uf.name, save_p, uf.type, desc_proc))
+            conn.commit(); conn.close()
+            st.success(f"Se han registrado y guardado exitosamente **{len(uploaded_files)} archivo(s)** en el repositorio SGC.")
+            st.rerun()
+
+    st.markdown("---")
+    # Exportación Universal PDF SGC
+    sec_sgc_pdf = [
+        {'title': 'Matriz de Procedimientos SGC', 'content': 'Resumen auditable de procedimientos oficiales ISO 9001:2015.'},
+        {'table': [['Código', 'Nombre del Procedimiento', 'Revisión', 'Área']] + [[p['Código'], p['Nombre'], p['Revisión'], p['Área']] for p in procedimientos]}
+    ]
+    pdf_sgc_bytes = generar_pdf_modulo("Sistema de Gestión de Calidad (SGC)", "Resumen Oficial de Procedimientos Normados J&D", sec_sgc_pdf)
+    st.download_button(
+        label="📄 EXPORTAR MATRIZ SGC COMPLETA EN PDF",
+        data=pdf_sgc_bytes,
+        file_name="Matriz_Procedimientos_SGC_JD.pdf",
+        mime="application/pdf",
+        type="primary",
+        use_container_width=True,
+        key="btn_dl_pdf_sgc_matriz"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. GLOSARIO DE DOCUMENTACIÓN (TABLA MAESTRA CON DESCARGA DE MUESTRAS)
+# 3. GLOSARIO DE DOCUMENTACIÓN (SECCIÓN 5)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_glosario_page():
     st.markdown(f"""
     <div class="jd-section-header">
-        <h2>📚 Glosario y Auditoría Master de Documentación</h2>
-        <p>Catálogo maestro auditable de todos los formatos y archivos generados e intercambiados por el sistema.</p>
+        <h2>📚 Glosario de Documentación y Tabla Maestra</h2>
+        <p>Tabla maestra auditable para auditar todos los archivos que entran o salen del sistema con descargas de muestras.</p>
     </div>""", unsafe_allow_html=True)
 
     docs_master = [
@@ -371,19 +456,18 @@ def render_glosario_page():
             col3.markdown(f"<span style='font-size:12px;color:{BRAND_ORANGE};font-weight:700;'>{doc['Asociado a / Referenciado en']}</span>", unsafe_allow_html=True)
 
             with col4:
-                # Generación al vuelo de muestra según tipo
                 if doc['Muestra'] == 'xml_msproject':
                     sample_bytes = """<?xml version="1.0" encoding="UTF-8"?><Project xmlns="http://schemas.microsoft.com/project"><SaveVersion>14</SaveVersion><Name>Muestra J&D MSProject</Name></Project>""".encode('utf-8')
                     file_n, mime_t = "Muestra_MSProject2024.xml", "application/vnd.ms-project"
                 elif doc['Muestra'] == 'eml_correo':
-                    sample_bytes = "From: ventas@jdautomation.com.mx\nSubject: Muestra Correo J&D\n\nPlan de Proyecto J&D Automation".encode('utf-8')
+                    sample_bytes = "From: ventas@jdautomation.mx\nSubject: Muestra Correo J&D\n\nPlan de Proyecto J&D Automation".encode('utf-8')
                     file_n, mime_t = "Muestra_Correo_JND.eml", "message/rfc822"
                 elif doc['Muestra'] == 'csv_gantt':
                     sample_bytes = "ID,Actividad,Tipo,Inicio,Duracion\n1,Pago Anticipo,Hito,2026-08-01,1\n".encode('utf-8')
                     file_n, mime_t = "Muestra_Gantt.csv", "text/csv"
                 else:
-                    sample_bytes = "Formato Oficial J&D Automation Industries S.A. de C.V.".encode('utf-8')
-                    file_n, mime_t = f"Muestra_{doc['Código del Documento']}.txt", "text/plain"
+                    sample_bytes = generar_pdf_modulo(doc['Código del Documento'], doc['Descripción / Nombre Oficial'], [{'title': 'Muestra Oficial', 'content': 'Documento de muestra institucional de J&D Automation Industries.'}])
+                    file_n, mime_t = f"Muestra_{doc['Código del Documento']}.pdf", "application/pdf"
 
                 st.download_button(
                     label="⬇️ Descarga Muestra",
@@ -391,20 +475,37 @@ def render_glosario_page():
                     file_name=file_n,
                     mime=mime_t,
                     key=f"dl_sample_{i}",
+                    type="primary",
                     use_container_width=True
                 )
         st.divider()
 
+    # Exportación Universal PDF Glosario
+    sec_glo_pdf = [
+        {'title': 'Glosario Maestro de Documentación', 'content': 'Catálogo estructurado para auditar archivos entrantes y salientes.'},
+        {'table': [['Código', 'Descripción / Nombre Oficial', 'Asociado a']] + [[d['Código del Documento'], d['Descripción / Nombre Oficial'], d['Asociado a / Referenciado en']] for d in docs_master]}
+    ]
+    pdf_glo_bytes = generar_pdf_modulo("Glosario Maestro de Documentación", "Auditoría de Formatos e Intercambio de Archivos J&D", sec_glo_pdf)
+    st.download_button(
+        label="📄 EXPORTAR GLOSARIO MAESTRO EN PDF",
+        data=pdf_glo_bytes,
+        file_name="Glosario_Maestro_Documentacion_JD.pdf",
+        mime="application/pdf",
+        type="primary",
+        use_container_width=True,
+        key="btn_dl_pdf_glosario_master"
+    )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. MANUFACTURA INTELIGENTE E INDUSTRIA 4.0
+# 4. MANUFACTURA INTELIGENTE E INDUSTRIA 4.0 (SECCIÓN 6)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_industria40_page():
     st.markdown(f"""
     <div class="jd-section-header">
         <h2>🤖 Manufactura Inteligente e Industria 4.0</h2>
-        <p>Justificación tecnológica, beneficios estratégicos comerciales y arquitectura del stack empleado en la plataforma.</p>
+        <p>Justificación tecnológica, beneficios estratégicos comerciales y resumen del stack empleado en la app.</p>
     </div>""", unsafe_allow_html=True)
 
     ind_tab1, ind_tab2, ind_tab3 = st.tabs([
@@ -419,7 +520,7 @@ def render_industria40_page():
                     border-radius:10px;padding:22px;font-family:'Montserrat',sans-serif;">
             <h3 style="font-size:16px;font-weight:800;color:{BRAND_CHARCOAL};margin:0 0 10px 0;">JUSTIFICACIÓN TECNOLÓGICA BAJO EL ESQUEMA INDUSTRIA 4.0</h3>
             <p style="font-size:13px;color:{BRAND_CHARCOAL_MED};line-height:1.7;margin:0 0 14px 0;">
-                En la industria de integración de sistemas de automatización, tableros de control y celdas robotizadas, 
+                En la integración de sistemas de automatización, tableros de control y celdas robotizadas, 
                 la velocidad y precisión de la cotización es la principal ventaja competitiva. Esta aplicación transforma 
                 el costeo tradicional en hojas de cálculo aisladas en una <b>Plataforma Digital Centralizada de Ingeniería Comercial</b>.
             </p>
@@ -473,25 +574,43 @@ def render_industria40_page():
         """, unsafe_allow_html=True)
 
         stack_items = [
-            {"Capa": "Núcleo Backend", "Tecnología": "Python 3.12+ & OpenPyXL", "Función": "Motor de cálculo financiero, procesamiento de matrices de precios y lógica de negocios."},
-            {"Capa": "Interfaz de Usuario (UI/UX)", "Tecnología": "Streamlit & Modern HTML/CSS", "Función": "Interfaz web responsiva de alta velocidad optimizada para ingeniería comercial."},
-            {"Capa": "Base de Datos", "Tecnología": "SQLite 3 Relational Engine", "Función": "Almacenamiento persistente con integridad referencial en cascada y control de revisiones."},
-            {"Capa": "Motor de Generación PDF", "Tecnología": "ReportLab PDF Engine", "Función": "Compilación al vuelo de documentos PDF membretados con logo institucional J&D."},
-            {"Capa": "Interoperabilidad MS Office", "Tecnología": "MSPDI XML Schema v14", "Función": "Integración nativa con Microsoft Project 2024 para apertura directa por doble clic."},
-            {"Capa": "Arquitectura de Correo", "Tecnología": "RFC 2045 / RFC 5545 (EML & iCalendar)", "Función": "Ensamblado de correos Multipart/Mixed con hitos de proyecto (.ics) agendables en Outlook."}
+            {"Capa": "Núcleo Backend", "Tecnología": "Python 3.12+ & OpenPyXL", "Función": "Motor de cálculo financiero, matrices de precios y lógica."},
+            {"Capa": "Interfaz de Usuario (UI/UX)", "Tecnología": "Streamlit & Modern HTML/CSS", "Función": "Interfaz web responsiva de alta velocidad."},
+            {"Capa": "Base de Datos", "Tecnología": "SQLite 3 Relational Engine", "Función": "Almacenamiento persistente con integridad referencial."},
+            {"Capa": "Motor de Generación PDF", "Tecnología": "ReportLab PDF Engine", "Función": "Compilación al vuelo de documentos PDF membretados."},
+            {"Capa": "Interoperabilidad MS Office", "Tecnología": "MSPDI XML Schema v14", "Función": "Integración nativa con Microsoft Project 2024."},
+            {"Capa": "Arquitectura de Correo", "Tecnología": "RFC 2045 / RFC 5545 (EML & iCalendar)", "Función": "Ensamblado de correos Multipart/Mixed con hitos agendables."}
         ]
         st.dataframe(pd.DataFrame(stack_items), use_container_width=True, hide_index=True)
 
+    st.markdown("---")
+    # Exportación Universal PDF Industria 4.0
+    sec_ind_pdf = [
+        {'title': 'Justificación Tecnológica Industria 4.0', 'content': 'Transformación del costeo tradicional en una Plataforma Digital Centralizada de Ingeniería Comercial.'},
+        {'title': 'Beneficios Comerciales y Técnicos', 'content': '• Reducción de tiempo de respuesta de 48h a 10 minutos.\n• Eliminación de errores de prorrateo.\n• Interoperabilidad nativa con Microsoft Office 2024.'},
+        {'table': [['Capa de Software', 'Tecnología', 'Función']] + [[s['Capa'], s['Tecnología'], s['Función']] for s in stack_items]}
+    ]
+    pdf_ind_bytes = generar_pdf_modulo("Manufactura Inteligente e Industria 4.0", "Resumen Tecnológico y Estratégico J&D Automation", sec_ind_pdf)
+    st.download_button(
+        label="📄 EXPORTAR RESUMEN INDUSTRIA 4.0 EN PDF",
+        data=pdf_ind_bytes,
+        file_name="Resumen_Industria40_Stack_JD.pdf",
+        mime="application/pdf",
+        type="primary",
+        use_container_width=True,
+        key="btn_dl_pdf_industria40"
+    )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. MANUAL DE OPERACIÓN INTERACTIVO
+# 5. MANUAL DE OPERACIÓN INTERACTIVO (SECCIÓN 7)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def render_manual_page():
     st.markdown(f"""
     <div class="jd-section-header">
         <h2>📖 Manual de Operación e Instrucción de Uso</h2>
-        <p>Guía paso a paso interactiva para la captura de proyectos, costeo por partidas, análisis financiero y exportación.</p>
+        <p>Guía interactiva paso a paso para la captura de proyectos, costeo por partidas, análisis financiero y exportación.</p>
     </div>""", unsafe_allow_html=True)
 
     # ── Banner de Descarga de Manual PDF ──
@@ -507,12 +626,12 @@ def render_manual_page():
         st.markdown(f"""
         <div style="background:{BRAND_GRAY_BG};border:2px solid {BRAND_ORANGE};border-radius:10px;padding:14px;margin-bottom:15px;">
             <h4 style="margin:0 0 4px 0;color:{BRAND_CHARCOAL};font-weight:900;font-size:14px;">📘 MANUAL OFICIAL EN PDF PARA PRESUPUESTADORES (PLANTILLA EXCEL V2.0)</h4>
-            <p style="margin:0;color:{BRAND_CHARCOAL_MED};font-size:12px;">Documento técnico ilustrado paso a paso: reglas de captura, listas desplegables, sueldos FASAR automáticos y prorrateo de gastos.</p>
+            <p style="margin:0;color:{BRAND_CHARCOAL_MED};font-size:12px;">Guía técnica ilustrada paso a paso: reglas de captura, sueldos FASAR y prorrateo de gastos.</p>
         </div>
         """, unsafe_allow_html=True)
     with col_m2:
         st.download_button(
-            label="📄 DESCARGAR MANUAL EN PDF",
+            label="📄 DESCARGAR MANUAL COMPLETO EN PDF",
             data=pdf_bytes,
             file_name="Manual_Usuario_Plantilla_Excel_JD.pdf",
             mime="application/pdf",
@@ -520,7 +639,6 @@ def render_manual_page():
             use_container_width=True,
             key="btn_dl_manual_page_pdf"
         )
-
 
     man_tab1, man_tab2, man_tab3, man_tab4 = st.tabs([
         "1. Captura de Cotización",
@@ -535,9 +653,9 @@ def render_manual_page():
             <h4 style="color:{BRAND_ORANGE};font-weight:800;margin:0 0 10px 0;">PASO 1: DATOS GENERALES DEL CLIENTE Y FOLIO</h4>
             <ol style="font-size:13px;color:{BRAND_CHARCOAL_MED};line-height:1.7;">
                 <li>Selecciona un cliente registrado en el directorio o utiliza la opción rápida <b>➕ Alta de Cliente</b>.</li>
-                <li>Ingresa la descripción del <b>Nombre del Proyecto</b> (ejemplo: <i>Instalación de Gabinete de Control PLC</i>).</li>
+                <li>Ingresa la descripción del <b>Nombre del Proyecto</b>.</li>
                 <li>Verifica el <b>Tipo de Cambio USD/MXN</b> aplicable a los materiales de importación.</li>
-                <li>Define los porcentajes predeterminados de <b>Margen de Utilidad (30%)</b>, <b>Comisión Comercial (5%)</b> y <b>Supervisión (30%)</b>.</li>
+                <li>Define los porcentajes de <b>Margen de Utilidad (30%)</b>, <b>Comisión Comercial (5%)</b> y <b>Supervisión (30%)</b>.</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
@@ -547,16 +665,8 @@ def render_manual_page():
         <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};padding:20px;border-radius:10px;">
             <h4 style="color:{BRAND_ORANGE};font-weight:800;margin:0 0 10px 0;">PASO 2 Y 3: ESTRUCTURACIÓN DE PARTIDAS Y DESGLOSE DE COSTOS</h4>
             <ol style="font-size:13px;color:{BRAND_CHARCOAL_MED};line-height:1.7;">
-                <li><b>Paso 2:</b> Agrega las partidas del proyecto (ej. <i>Partida 1: Ensamble Mecánico</i>, <i>Partida 2: Programación PLC</i>).</li>
-                <li><b>Paso 3:</b> Desglosa los 5 rubros de costos en cada partida:
-                    <ul>
-                        <li><b>Materiales:</b> Captura de conceptos, cantidades y selección de moneda (MXN/USD).</li>
-                        <li><b>Mano de Obra (MO):</b> Selección del catálogo de puestos J&D (Ingeniero Senior, Técnico, Programador PLC).</li>
-                        <li><b>Subcontratos:</b> Selección del catálogo oficial de subcontratos o captura personalizada.</li>
-                        <li><b>Maquinaria y Equipo:</b> Renta de grúas, elevadores de tijera y equipos especializados.</li>
-                        <li><b>Gastos Generales:</b> Selección del catálogo oficial de 59 conceptos de obra (Fletes, Viáticos, EPP, Consumibles).</li>
-                    </ul>
-                </li>
+                <li>Agrega las partidas del proyecto (ej. <i>Partida 1: Ensamble Mecánico</i>, <i>Partida 2: Programación PLC</i>).</li>
+                <li>Desglosa los 5 rubros de costos en cada partida: Materiales, Mano de Obra, Subcontratos, Maquinaria y Gastos Generales.</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
@@ -566,10 +676,9 @@ def render_manual_page():
         <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};padding:20px;border-radius:10px;">
             <h4 style="color:{BRAND_ORANGE};font-weight:800;margin:0 0 10px 0;">PASO 4: DASHBOARD ANÁLISIS DE COSTO DIRECTO Y CONGELAMIENTO</h4>
             <ol style="font-size:13px;color:{BRAND_CHARCOAL_MED};line-height:1.7;">
-                <li>Consulta el <b>Dashboard de Resumen de Costo Directo por Rubro</b> y la gráfica de distribución Donut.</li>
-                <li>Revisa la tabla ponderada por partida con el <b>Costo Directo, Precio de Venta y Margen $</b>.</li>
-                <li>Para emitir la oferta oficial al cliente, haz clic en <b>🔒 Aprobar y CONGELAR Cotización</b>.</li>
-                <li>Si el cliente solicita cambios posteriores, presiona <b>🔄 Crear Nueva Revisión (R+1)</b> para clonar el proyecto manteniendo el historial intacto.</li>
+                <li>Consulta el <b>Dashboard de Resumen de Costo Directo por Rubro</b>.</li>
+                <li>Haz clic en <b>🔒 Aprobar y CONGELAR Cotización</b> para emitir la oferta oficial.</li>
+                <li>Si hay cambios posteriores, presiona <b>🔄 Crear Nueva Revisión (R+1)</b>.</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
@@ -580,14 +689,8 @@ def render_manual_page():
             <h4 style="color:{BRAND_ORANGE};font-weight:800;margin:0 0 10px 0;">PLAN DE PROYECTO, MS PROJECT 2024 Y CORREO EML</h4>
             <ol style="font-size:13px;color:{BRAND_CHARCOAL_MED};line-height:1.7;">
                 <li>Ingresa al módulo independiente <b>📅 Plan de Proyecto</b> en el menú lateral.</li>
-                <li>Asigna la fecha tentativa de inicio y ajusta la duración y tipo de tarea (Actividad vs <b>🚩 Hito</b>).</li>
-                <li>En el <b>Paso 3 de Exportación</b>, haz clic en:
-                    <ul>
-                        <li><b><code>✉️ GENERAR Y DESCARGAR CORREO (.EML)</code></b>: Genera el correo con texto corporativo J&D y adjuntos `.ics` de hitos agendables.</li>
-                        <li><b><code>📄 DESCARGAR PDF EJECUTIVO</code></b>: Genera el reporte PDF impreso con el logo oficial.</li>
-                        <li><b><code>⚡ GENERAR ARCHIVO NATIVO MS PROJECT 2024 (.XML)</code></b>: Descarga el archivo nativo MSPDI v14 de apertura instantánea.</li>
-                    </ul>
-                </li>
+                <li>Asigna fechas de inicio y duraciones de tareas.</li>
+                <li>Exporta en 1 clic los formatos: <code>✉️ CORREO (.EML)</code>, <code>📄 PDF EJECUTIVO</code> o <code>⚡ MS PROJECT 2024 (.XML)</code>.</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)

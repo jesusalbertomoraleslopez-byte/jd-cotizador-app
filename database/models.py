@@ -340,6 +340,21 @@ def init_db():
     );
     """)
 
+    # 12. TABLA SGC — Registro de Documentos y Procedimientos del SGC
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS sgc_documentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo TEXT NOT NULL,
+        nombre TEXT NOT NULL,
+        revision TEXT DEFAULT 'Rev. 01',
+        area TEXT DEFAULT 'Ingeniería Comercial',
+        archivo_path TEXT,
+        mime_type TEXT,
+        fecha_subida DATETIME DEFAULT CURRENT_TIMESTAMP,
+        observaciones TEXT
+    );
+    """)
+
     conn.commit()
 
     # ── Migración segura: columnas de versión/congelamiento en cotizaciones ──

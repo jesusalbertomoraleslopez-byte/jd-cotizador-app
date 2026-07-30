@@ -134,9 +134,30 @@ CUSTOM_CSS = f"""
     div.stButton > button:first-child:hover,
     div.stFormSubmitButton > button:first-child:hover {{
         background-color: {BRAND_ORANGE_DARK} !important;
-        color: {BRAND_WHITE} !important;
         transform: translateY(-1px) !important;
-        box-shadow: 0 6px 14px rgba(254, 140, 41, 0.45) !important;
+        box-shadow: 0 5px 12px rgba(254, 140, 41, 0.45) !important;
+    }}
+
+    /* ─── BOTONES DE DESCARGA E INFOS EN AZUL INTENSO CORPORATIVO ─── */
+    .stDownloadButton > button,
+    button[kind="primaryDownload"] {{
+        background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%) !important;
+        color: #FFFFFF !important;
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 800 !important;
+        font-size: 12.5px !important;
+        border: 1px solid #1D4ED8 !important;
+        border-radius: 8px !important;
+        padding: 10px 24px !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+        transition: all 0.2s ease !important;
+    }}
+    .stDownloadButton > button:hover,
+    button[kind="primaryDownload"]:hover {{
+        background: linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%) !important;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5) !important;
+        transform: translateY(-1px) !important;
+        color: #FFFFFF !important;
     }}
     div.stButton > button:first-child:active,
     div.stFormSubmitButton > button:first-child:active {{
