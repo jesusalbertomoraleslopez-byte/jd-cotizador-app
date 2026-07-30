@@ -1051,6 +1051,13 @@ def render_cierre_entrega():
     </div>
     """, unsafe_allow_html=True)
 
+    # Auto-guardado persistente en estructura de carpetas (cotizaciones_guardadas/{folio}/)
+    try:
+        from database.storage_manager import save_cotizacion_to_folder
+        save_cotizacion_to_folder(cot_info, pdf_bytes, excel_bytes, eml_bytes, zip_bytes)
+    except Exception:
+        pass
+
     st.markdown("""
     <style>
     .btn-correo-azul button {

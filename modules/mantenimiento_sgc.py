@@ -40,12 +40,13 @@ def render_mantenimiento_page():
         </div>
         """, unsafe_allow_html=True)
 
-    m_tab1, m_tab2, m_tab3, m_tab4, m_tab5 = st.tabs([
+    m_tab1, m_tab2, m_tab3, m_tab4, m_tab5, m_tab6 = st.tabs([
         "🔒 Control DB & Borrado Masivo",
         "🏢 Clientes",
         "📦 Catálogos Base",
         "✏️ Modificador de Cotizaciones",
-        "🗄️ Explorador Deploy & GitHub"
+        "🗄️ Explorador Deploy",
+        "📁 Resguardo Carpetas & Borrado GitHub"
     ])
 
     # ── TAB 1: GESTIÓN DE BASE DE DATOS & BORRADO ──
@@ -284,6 +285,86 @@ def render_mantenimiento_page():
             use_container_width=True,
             key="btn_dl_pdf_mantenimiento"
         )
+
+    # ── TAB 6: RESGUARDO DE CARPETAS & BORRADO GITHUB ──
+    with m_tab6:
+        st.markdown(f"""
+        <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};border-left:5px solid {BRAND_ORANGE};
+                    border-radius:8px;padding:16px 20px;margin-bottom:20px;font-family:'Montserrat',sans-serif;">
+            <p style="font-size:13px;font-weight:700;color:{BRAND_CHARCOAL};margin:0 0 4px 0;">
+                📁 REGISTRO PERSISTENTE DE CARPETAS DE COTIZACIÓN Y SINCRONIZACIÓN GITHUB
+            </p>
+            <p style="font-size:11px;color:{BRAND_CHARCOAL_MED};margin:0;">
+                Cada cotización generada guarda sus 5 entregables (PDF, Excel, .EML, .ZIP y metadata JSON) en la carpeta resguardada `cotizaciones_guardadas/{{folio}}/`. 
+                Aunque se reinicie la app o se borre la BD SQLite, esta información se mantiene intacta.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        from database.storage_manager import list_saved_cotizaciones, delete_saved_cotizacion_folder, delete_from_github_api
+        saved_cots = list_saved_cotizaciones()
+
+        if not saved_cots:
+            st.info("No hay carpetas de cotización resguardadas en `cotizaciones_guardadas/` actualmente.")
+        else:
+            df_storage = pd.DataFrame(saved_cots)[['folio_folder', 'proyecto', 'cliente', 'fecha_guardado', 'num_archivos', 'tamano_kb']]
+            st.dataframe(
+                df_storage,
+                column_config={
+                    "folio_folder": st.column_config.TextColumn("Carpeta Folio"),
+                    "proyecto": st.column_config.TextColumn("Proyecto"),
+                    "cliente": st.column_config.TextColumn("Cliente"),
+                    "fecha_guardado": st.column_config.TextColumn("Fecha Guardado"),
+                    "num_archivos": st.column_config.NumberColumn("Archivos"),
+                    "tamano_kb": st.column_config.TextColumn("Tamaño")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.markdown("---")
+
+            col_sel_f, col_act_f = st.columns([2, 1.5])
+            with col_sel_f:
+                opt_folders = [s['folio_folder'] for s in saved_cots]
+                sel_folder = st.selectbox("Seleccionar Carpeta de Cotización para Gestionar", opt_folders, key="sel_folder_resguardo")
+                
+                # Mostrar contenido de la carpeta seleccionada
+                target_rec = next((r for r in saved_cots if r['folio_folder'] == sel_folder), None)
+                if target_rec:
+                    st.markdown(f"**Archivos en `cotizaciones_guardadas/{sel_folder}/`:**")
+                    for af in target_rec['archivos']:
+                        af_p = os.path.join(target_rec['folder_path'], af)
+                        af_size = os.path.getsize(af_p) / 1024.0 if os.path.exists(af_p) else 0.0
+                        st.markdown(f"• `{af}` ({af_size:.1f} KB)")
+
+            with col_act_f:
+                st.markdown(f"<p style='font-size:12px;font-weight:800;color:#DC2626;'>🗑️ ACCIONES DE ELIMINACIÓN Y BORRADO REMOTO</p>", unsafe_allow_html=True)
+                
+                gh_token_input = st.text_input("GitHub Token (PAT Opcional)", value=os.environ.get("GITHUB_TOKEN", ""), type="password", help="Ingresa tu Personal Access Token de GitHub si deseas forzar el borrado en el repositorio remoto", key="gh_token_input")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button(f"🗑️ Eliminar '{sel_folder}' Localmente", use_container_width=True, key="btn_del_local_folder"):
+                    if not admin_ok:
+                        st.error("🔒 Se requiere perfil de ADMINISTRADOR para borrar carpetas resguardadas.")
+                    else:
+                        if delete_saved_cotizacion_folder(sel_folder):
+                            st.success(f"La carpeta '{sel_folder}' ha sido eliminada localmente.")
+                            st.rerun()
+                        else:
+                            st.error("No se pudo encontrar la carpeta especificada.")
+
+                if st.button(f"🌐 ELIMINAR Y PURGAR CARPETA EN GITHUB", type="primary", use_container_width=True, key="btn_del_github_folder"):
+                    if not admin_ok:
+                        st.error("🔒 Se requiere perfil de ADMINISTRADOR para eliminar en GitHub.")
+                    else:
+                        with st.spinner(f"Eliminando carpeta '{sel_folder}' en repositorio GitHub..."):
+                            res_gh = delete_from_github_api(sel_folder, token=gh_token_input.strip() if gh_token_input else None)
+                            if res_gh["success"]:
+                                st.success(f"🎉 {res_gh['message']} (Método: {res_gh['method']})")
+                                st.rerun()
+                            else:
+                                st.error(f"Error al eliminar en GitHub: {res_gh['message']}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
