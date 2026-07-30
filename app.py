@@ -49,7 +49,13 @@ try:
 except Exception as _e:
     pass
 
-from modules.auth import render_login_sidebar
+from modules.auth import init_auth_state, render_login_screen, render_login_sidebar
+
+# ─── AUTENTICACIÓN OBLIGATORIA DESDE EL INICIO ───
+init_auth_state()
+if not st.session_state.get('authenticated'):
+    render_login_screen()
+    st.stop()
 
 # ─── SIDEBAR CORPORATIVO J&D ───
 with st.sidebar:
