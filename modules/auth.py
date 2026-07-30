@@ -76,8 +76,8 @@ def render_login_screen():
     """, unsafe_allow_html=True)
 
     with st.form("login_portal_form"):
-        u_in = st.text_input("👤 Usuario", "admin", placeholder="Ej. admin u operador")
-        p_in = st.text_input("🔑 Contraseña", "123", type="password", placeholder="••••••••")
+        u_in = st.text_input("👤 Usuario", "", placeholder="Ingresa tu usuario")
+        p_in = st.text_input("🔑 Contraseña", "", type="password", placeholder="••••••••")
         
         submitted = st.form_submit_button("🔐 INICIAR SESIÓN", type="primary", use_container_width=True)
         if submitted:
@@ -94,11 +94,6 @@ def render_login_screen():
                 st.error("❌ Usuario o contraseña incorrectos. Verifique sus datos.")
 
     st.markdown("""
-    <div style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:8px; padding:12px; margin-top:16px; font-size:11px; color:#475569; font-family:'Montserrat',sans-serif;">
-        <b>Credenciales de Prueba Registradas:</b><br/>
-        • <b>Administrador:</b> Usuario: <code>admin</code> | Contraseña: <code>123</code><br/>
-        • <b>Operador:</b> Usuario: <code>operador</code> | Contraseña: <code>123</code>
-    </div>
     <p style="text-align:center; font-size:10px; color:#94A3B8; margin-top:20px; font-family:'Montserrat',sans-serif;">
         J&D Automation Industries S.A. de C.V. &bull; Torreón, Coahuila, México.
     </p>
