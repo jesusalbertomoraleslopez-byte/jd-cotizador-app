@@ -45,18 +45,18 @@ CUSTOM_CSS = f"""
     .stToolbar,
     [data-testid="stToolbar"],
     [data-testid="stDecoration"],
-    [data-testid="stActionButtonIcon"] {
+    [data-testid="stActionButtonIcon"] {{
         display: none !important;
         visibility: hidden !important;
         height: 0px !important;
         padding: 0px !important;
         margin: 0px !important;
-    }
+    }}
 
     /* Reducir espacio superior vacante de la página principal */
-    .block-container, [data-testid="stMainBlockContainer"] {
+    .block-container, [data-testid="stMainBlockContainer"] {{
         padding-top: 1rem !important;
-    }
+    }}
 
     /* ─── TIPOGRAFÍA CORPORATIVA MONTSERRAT ─── */
     html, body, .stWidget, .stMarkdown, p, li, label, input, button, span, div {{
