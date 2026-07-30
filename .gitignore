@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Database
+*.db
+*.sqlite3
+
+# Sample & Test Files
+test_*.pdf
+test_*.eml
+test_*.xlsx
+COT-*.xlsx
+scratch/
+archivos_analisis/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
