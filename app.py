@@ -49,7 +49,14 @@ try:
 except Exception as _e:
     pass
 
-from modules.auth import init_auth_state, render_login_screen, render_login_sidebar
+try:
+    from modules.auth import init_auth_state, render_login_screen, render_login_sidebar
+except ImportError:
+    import sys
+    import importlib
+    if 'modules.auth' in sys.modules:
+        importlib.reload(sys.modules['modules.auth'])
+    from modules.auth import init_auth_state, render_login_screen, render_login_sidebar
 
 # ─── AUTENTICACIÓN OBLIGATORIA DESDE EL INICIO ───
 init_auth_state()
