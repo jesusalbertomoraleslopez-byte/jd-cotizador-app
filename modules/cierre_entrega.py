@@ -709,8 +709,12 @@ def _generate_presupuesto_excel(cot_info, partidas):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
-    from email.mime.image import MIMEImage
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.application import MIMEApplication
     import base64
+    import re
+    import os
     
     msg = MIMEMultipart('mixed')
     folio = cot_info.get('folio', 'COT-2026-001-JAI-DS')
@@ -728,6 +732,9 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
     clean_f = folio.replace('_Cotizacion_Oficial', '').strip()
     f_parts = clean_f.split('-')
     folio_corto = "-".join(f_parts[:3]) if len(f_parts) >= 3 else clean_f
+
+    # Sanitizar el nombre del folio para nombres de archivo HTTP/MIME limpios sin caracteres especiales
+    clean_folio_fname = re.sub(r'[^a-zA-Z0-9_-]', '_', folio_corto).strip('_')
 
     condiciones_pago = cot_info.get('condiciones_pago', '50% Anticipo | 30% Contra entrega de tableros | 20% Cierre de SAT')
     tiempo_entrega = cot_info.get('tiempo_entrega', '14 semanas')
@@ -748,9 +755,9 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
     moneda_code = 'USD' if 'USD' in str(moneda_str).upper() else 'MXN'
     precio_total_str = f"${total_con_iva:,.2f} {moneda_code} (IVA Incluido)"
 
-    # Pre-cálculo y escalado del logotipo al doble (280px) manteniendo la proporción exacta
+    # Pre-cálculo y escalado del logotipo a Base64 manteniendo la proporción exacta al doble (280px)
     logo_w, logo_h = 280, 70
-    logo_bytes_res = None
+    logo_b64 = ""
     logo_path = get_brand_asset_path("logo_corporativo.png")
     if os.path.exists(logo_path):
         try:
@@ -760,7 +767,7 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
             logo_w, logo_h = im.size
             buf = io.BytesIO()
             im.save(buf, format="PNG")
-            logo_bytes_res = buf.getvalue()
+            logo_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
         except Exception:
             pass
 
@@ -768,40 +775,7 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
     msg['From'] = "Ing. David Alaniz <ventas@jdautomation.mx>"
     msg['To'] = f"{contacto} <contacto@cliente.com>"
 
-    text_body = f"""Estimado {contacto_saludo},
-
-A nombre de J&D Automation Industries, le extendemos un cordial saludo. Nos dirigimos a usted con el agrado de presentarle formalmente nuestra propuesta técnica y económica para la {proyecto} en la planta de {cliente}, elaborada con base en el levantamiento de información y las necesidades operativas que nos han compartido.
-
-En J&D nos comprometemos a ser un aliado estratégico en la evolución tecnológica de sus procesos de manufactura. La solución que ponemos a su consideración integra ingeniería de detalle, ensamble de tableros con componentes de marcas líderes a nivel global y una programación estructurada que garantiza operaciones seguras, eficientes y de fácil diagnóstico para sus operadores.
-
-RESUMEN EJECUTIVO DE LA PROPUESTA:
-• Folio de Cotización: {clean_f}
-• Cliente:             {cliente}
-• Proyecto:            {proyecto}
-• Fecha / Revisión:    {fecha_rev} ({rev_str})
-• Monto Total (c/IVA): {precio_total_str}
-• Tiempo de Entrega:   {tiempo_entrega} (A partir del anticipo e ingeniería base firmada)
-• Esquema de Pago:     {condiciones_pago}
-
-DOCUMENTACIÓN ADJUNTA (Para su revisión):
-1. {folio_corto}_Propuesta_Tecnico_Comercial.pdf
-   Documento membretado con el alcance de ingeniería, arquitectura de control (PLC/HMI), marcas propuestas y términos legales.
-   
-2. {folio_corto}_Presupuesto_Financiero.xlsx
-   Desglose económico transparente con fórmulas abiertas para su departamento de compras.
-
-Quedamos atentos para analizar juntos cada sección de este documento y agendar una sesión técnica si así lo requiere.
-
-Atentamente,
-
-Ing. David Alaniz
-Área de Ingeniería Comercial & Ventas
-J&D Automation Industries S.A. de C.V.
-Tel: 871 8176 8569 | Cel: 871 795 4403
-Email: ventas@jdautomation.mx | Web: www.jdautomation.mx
------------------------------------------------------------------------------------------
-J&D Automation Industries • Calle F #382, Col. Eduardo Guerra, Torreón, Coahuila, México.
-"""
+    logo_img_tag = f'<div style="background:#FFFFFF; padding:8px 16px; border-radius:8px; display:inline-block; margin-bottom:12px;"><img src="data:image/png;base64,{logo_b64}" width="{logo_w}" height="{logo_h}" style="width:{logo_w}px; height:{logo_h}px; display:block; border:0;" alt="J&amp;D Automation"></div>' if logo_b64 else ''
 
     html_body = f"""<!DOCTYPE html>
 <html>
@@ -833,9 +807,7 @@ J&D Automation Industries • Calle F #382, Col. Eduardo Guerra, Torreón, Coahu
 <body>
     <div class="container">
         <div class="header">
-            <div style="background:#FFFFFF; padding:8px 16px; border-radius:8px; display:inline-block; margin-bottom:12px;">
-                <img src="cid:logo_jd_corporativo" width="{logo_w}" height="{logo_h}" style="width:{logo_w}px; height:{logo_h}px; display:block; border:0;" alt="J&amp;D Automation">
-            </div>
+            {logo_img_tag}
             <h1>J&amp;D AUTOMATION INDUSTRIES</h1>
             <p>Propuesta Técnica &amp; Comercial de Automatización</p>
         </div>
@@ -864,11 +836,11 @@ J&D Automation Industries • Calle F #382, Col. Eduardo Guerra, Torreón, Coahu
             <div class="section-title">DOCUMENTACIÓN ADJUNTA (Para su revisión):</div>
             <div class="doc-list">
                 <div class="doc-item">
-                    <div class="doc-name">1. {folio_corto}_Propuesta_Tecnico_Comercial.pdf</div>
+                    <div class="doc-name">1. {clean_folio_fname}_Propuesta_Tecnico_Comercial.pdf</div>
                     <div class="doc-desc">Documento membretado con el alcance de ingeniería, arquitectura de control (PLC/HMI), marcas propuestas y términos legales.</div>
                 </div>
                 <div class="doc-item">
-                    <div class="doc-name">2. {folio_corto}_Presupuesto_Financiero.xlsx</div>
+                    <div class="doc-name">2. {clean_folio_fname}_Presupuesto_Financiero.xlsx</div>
                     <div class="doc-desc">Desglose económico transparente con fórmulas abiertas para su departamento de compras.</div>
                 </div>
             </div>
@@ -893,56 +865,12 @@ J&D Automation Industries • Calle F #382, Col. Eduardo Guerra, Torreón, Coahu
 </body>
 </html>"""
 
-    # 1. Sub-contenedor multipart/related para cuerpo HTML + imágenes inline CID
-    msg_related = MIMEMultipart('related')
-    
-    # 2. Sub-sub-contenedor multipart/alternative para texto plano vs HTML
-    msg_alt = MIMEMultipart('alternative')
-    msg_alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
-    msg_alt.attach(MIMEText(html_body, 'html', 'utf-8'))
-    msg_related.attach(msg_alt)
+    # 1. Adjuntar únicamente el cuerpo HTML (con el logo incrustado en Base64)
+    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
-    # 3. Adjuntar Logotipo como MIMEImage redimensionado proporcionalmente a 280px
-    if logo_bytes_res:
-        img_part = MIMEImage(logo_bytes_res)
-        img_part.add_header('Content-ID', '<logo_jd_corporativo>')
-        img_part.add_header('Content-Disposition', 'inline', filename="logo_corporativo.png")
-        msg_related.attach(img_part)
-    
-    # 2. Sub-sub-contenedor multipart/alternative para texto plano vs HTML
-    msg_alt = MIMEMultipart('alternative')
-    msg_alt.attach(MIMEText(text_body, 'plain', 'utf-8'))
-    msg_alt.attach(MIMEText(html_body, 'html', 'utf-8'))
-    msg_related.attach(msg_alt)
-
-    # 3. Adjuntar Logotipo como MIMEImage redimensionado a miniatura para garantizad tamaño pequeño en Outlook Desktop
-    logo_path = get_brand_asset_path("logo_corporativo.png")
-    if os.path.exists(logo_path):
-        try:
-            from PIL import Image
-            im = Image.open(logo_path)
-            im.thumbnail((140, 35), Image.Resampling.LANCZOS)
-            buf = io.BytesIO()
-            im.save(buf, format="PNG")
-            img_part = MIMEImage(buf.getvalue())
-            img_part.add_header('Content-ID', '<logo_jd_corporativo>')
-            img_part.add_header('Content-Disposition', 'inline', filename="logo_corporativo.png")
-            msg_related.attach(img_part)
-        except Exception:
-            try:
-                with open(logo_path, "rb") as lf:
-                    img_part = MIMEImage(lf.read())
-                img_part.add_header('Content-ID', '<logo_jd_corporativo>')
-                img_part.add_header('Content-Disposition', 'inline', filename="logo_corporativo.png")
-                msg_related.attach(img_part)
-            except Exception:
-                pass
-
-    msg.attach(msg_related)
-
-    # 4. Adjuntar Archivos PDF y Excel como MIMEApplication al contenedor principal (mixed) con tipos MIME estrictos
-    pdf_filename = f"{folio_corto}_Propuesta_Tecnico_Comercial.pdf"
-    excel_filename = f"{folio_corto}_Presupuesto_Financiero.xlsx"
+    # 2. Adjuntar únicamente los 2 Archivos Oficiales (PDF y Excel)
+    pdf_filename = f"{clean_folio_fname}_Propuesta_Tecnico_Comercial.pdf"
+    excel_filename = f"{clean_folio_fname}_Presupuesto_Financiero.xlsx"
 
     part_pdf = MIMEApplication(pdf_bytes, _subtype="pdf")
     part_pdf.add_header("Content-Disposition", "attachment", filename=pdf_filename)
