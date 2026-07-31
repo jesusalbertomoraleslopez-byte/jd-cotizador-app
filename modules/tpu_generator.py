@@ -1,7 +1,7 @@
 """
 Módulo de Tarjetas de Precios Unitarios (TPU) — J&D Automation Industries
-Generación e inspección detallada de TPU por partida con ajuste individual y ajuste global/masivo.
-Ajusta Indirecto de campo por default al 7.00% e Indirecto Central al 12.00%.
+Generación e inspección detallada de TPU por partida, ajuste unificado (Individual y Global)
+y Dashboard de Matriz Resumen por Cotización.
 """
 
 import streamlit as st
@@ -9,6 +9,7 @@ import pandas as pd
 import io
 import os
 import re
+import openpyxl
 from datetime import datetime
 from database.models import get_connection
 from utils.number_to_letters import numero_a_letras_mxn
@@ -232,6 +233,236 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     }
 
 
+def generate_tpu_dashboard_excel(cot_info, partidas):
+    """
+    Genera un archivo Excel (.xlsx) oficial con el Dashboard Resumen de Matriz TPU por Cotización.
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Dashboard TPU"
+
+    ws.append([f"RESUMEN DASHBOARD DE PRECIOS UNITARIOS (TPU) - {cot_info.get('folio','—')}"])
+    ws.append([f"Proyecto: {cot_info.get('proyecto','—')}", f"Cliente: {cot_info.get('cliente','—')}", f"Fecha: {datetime.now().strftime('%Y-%m-%d')}"])
+    ws.append([])
+
+    headers = [
+        "Partida",
+        "Materiales Directos ($)", "% Mat",
+        "Maquinaria y Equipo ($)", "% Maq",
+        "Mano de Obra ($)", "% MO",
+        "COSTO UNITARIO BASE ($)", "% Base",
+        "Indirecto de Campo ($)", "% Campo",
+        "Indirecto Central ($)", "% Central",
+        "Utilidad ($)", "% Util",
+        "PRECIO UNITARIO FINAL ($)", "% Final",
+        "Total con IVA ($)"
+    ]
+    ws.append(headers)
+
+    tot_mat = tot_maq = tot_mo = tot_base = tot_campo = tot_central = tot_util = tot_final = tot_iva = 0.0
+
+    for p in partidas:
+        p_id = p['id']
+        conn = get_connection(); cur = conn.cursor()
+        cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (p_id,))
+        mats = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (p_id,))
+        mo = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (p_id,))
+        sub = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (p_id,))
+        maq = [dict(r) for r in cur.fetchall()]
+        conn.close()
+
+        tpu = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
+        pu_f = tpu['precio_unitario_final']
+        p_name = f"Partida {p.get('numero_partida',1):04d}: {p.get('descripcion','')[:40]}"
+
+        m_mat = tpu['costo_mat_unitario']
+        m_maq = tpu['costo_maq_unitario']
+        m_mo = tpu['precio_unitario_mo_factor']
+        m_base = tpu['costo_unitario_base']
+        m_campo = tpu['monto_ind_campo']
+        m_central = tpu['monto_ind_central']
+        m_util = tpu['monto_utilidad']
+        m_iva = pu_f * 1.16
+
+        tot_mat += m_mat
+        tot_maq += m_maq
+        tot_mo += m_mo
+        tot_base += m_base
+        tot_campo += m_campo
+        tot_central += m_central
+        tot_util += m_util
+        tot_final += pu_f
+        tot_iva += m_iva
+
+        ws.append([
+            p_name,
+            m_mat, (m_mat / pu_f) if pu_f > 0 else 0,
+            m_maq, (m_maq / pu_f) if pu_f > 0 else 0,
+            m_mo, (m_mo / pu_f) if pu_f > 0 else 0,
+            m_base, (m_base / pu_f) if pu_f > 0 else 0,
+            m_campo, (m_campo / pu_f) if pu_f > 0 else 0,
+            m_central, (m_central / pu_f) if pu_f > 0 else 0,
+            m_util, (m_util / pu_f) if pu_f > 0 else 0,
+            pu_f, 1.0,
+            m_iva
+        ])
+
+    ws.append([
+        "TOTAL GENERAL",
+        tot_mat, (tot_mat / tot_final) if tot_final > 0 else 0,
+        tot_maq, (tot_maq / tot_final) if tot_final > 0 else 0,
+        tot_mo, (tot_mo / tot_final) if tot_final > 0 else 0,
+        tot_base, (tot_base / tot_final) if tot_final > 0 else 0,
+        tot_campo, (tot_campo / tot_final) if tot_final > 0 else 0,
+        tot_central, (tot_central / tot_final) if tot_final > 0 else 0,
+        tot_util, (tot_util / tot_final) if tot_final > 0 else 0,
+        tot_final, 1.0,
+        tot_iva
+    ])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def render_tpu_dashboard_summary(cot_info, partidas):
+    """
+    Renderiza la Tabla Resumen Dashboard de TPU filtrada por cotización idéntica al prototipo del usuario.
+    """
+    st.markdown(f"""
+    <div style="background:#FFFBEB; border:2px solid #F59E0B; border-radius:10px; padding:16px 20px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <h4 style="margin:0; color:#B45309; font-size:16px; font-weight:800;">📊 DASHBOARD RESUMEN DE MATRIZ TPU — {cot_info.get('folio','—')}</h4>
+                <p style="margin:2px 0 0 0; color:#92400E; font-size:11.5px;">
+                    Proyecto: <b>{cot_info.get('proyecto','—')}</b> &nbsp;|&nbsp; Cliente: <b>{cot_info.get('cliente','—')}</b> &nbsp;|&nbsp; Total Partidas: <b>{len(partidas)}</b>
+                </p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    rows_html = ""
+    tot_mat = tot_maq = tot_mo = tot_base = tot_campo = tot_central = tot_util = tot_final = tot_iva = 0.0
+
+    for p in partidas:
+        p_id = p['id']
+        conn = get_connection(); cur = conn.cursor()
+        cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (p_id,))
+        mats = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (p_id,))
+        mo = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (p_id,))
+        sub = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (p_id,))
+        maq = [dict(r) for r in cur.fetchall()]
+        conn.close()
+
+        tpu = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
+        pu_f = tpu['precio_unitario_final']
+        p_num = f"Partida {p.get('numero_partida',1):04d}"
+
+        m_mat = tpu['costo_mat_unitario']
+        m_maq = tpu['costo_maq_unitario']
+        m_mo = tpu['precio_unitario_mo_factor']
+        m_base = tpu['costo_unitario_base']
+        m_campo = tpu['monto_ind_campo']
+        m_central = tpu['monto_ind_central']
+        m_util = tpu['monto_utilidad']
+        m_iva = pu_f * 1.16
+
+        pct_mat = (m_mat / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_maq = (m_maq / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_mo = (m_mo / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_base = (m_base / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_campo = (m_campo / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_central = (m_central / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_util = (m_util / pu_f * 100.0) if pu_f > 0 else 0.0
+
+        tot_mat += m_mat
+        tot_maq += m_maq
+        tot_mo += m_mo
+        tot_base += m_base
+        tot_campo += m_campo
+        tot_central += m_central
+        tot_util += m_util
+        tot_final += pu_f
+        tot_iva += m_iva
+
+        rows_html += f"""
+        <tr style="border-bottom:1px solid #E2E8F0; text-align:center; font-size:11px;">
+            <td style="padding:6px 8px; text-align:left; font-weight:700; background:#F8FAFC;">{p_num}</td>
+            <td style="padding:6px 8px;">${m_mat:,.2f} ({pct_mat:.1f}%)</td>
+            <td style="padding:6px 8px;">${m_maq:,.2f} ({pct_maq:.1f}%)</td>
+            <td style="padding:6px 8px;">${m_mo:,.2f} ({pct_mo:.1f}%)</td>
+            <td style="padding:6px 8px; font-weight:700; background:#FFFBEB;">${m_base:,.2f} ({pct_base:.1f}%)</td>
+            <td style="padding:6px 8px;">${m_campo:,.2f} ({pct_campo:.1f}%)</td>
+            <td style="padding:6px 8px;">${m_central:,.2f} ({pct_central:.1f}%)</td>
+            <td style="padding:6px 8px; font-weight:800; color:#047857; background:#ECFDF5;">${pu_f:,.2f} (100%)</td>
+            <td style="padding:6px 8px; font-weight:700; color:#1E293B;">${m_iva:,.2f}</td>
+        </tr>
+        """
+
+    tot_pct_mat = (tot_mat / tot_final * 100.0) if tot_final > 0 else 0.0
+    tot_pct_maq = (tot_maq / tot_final * 100.0) if tot_final > 0 else 0.0
+    tot_pct_mo = (tot_mo / tot_final * 100.0) if tot_final > 0 else 0.0
+    tot_pct_base = (tot_base / tot_final * 100.0) if tot_final > 0 else 0.0
+    tot_pct_campo = (tot_campo / tot_final * 100.0) if tot_final > 0 else 0.0
+    tot_pct_central = (tot_central / tot_final * 100.0) if tot_final > 0 else 0.0
+
+    total_row_html = f"""
+    <tr style="background:#FDE68A; color:#0F172A; text-align:center; font-weight:900; font-size:11.5px; border-top:2px solid #D97706;">
+        <td style="padding:8px; text-align:left;">TOTAL GENERAL</td>
+        <td style="padding:8px;">${tot_mat:,.2f} ({tot_pct_mat:.1f}%)</td>
+        <td style="padding:8px;">${tot_maq:,.2f} ({tot_pct_maq:.1f}%)</td>
+        <td style="padding:8px;">${tot_mo:,.2f} ({tot_pct_mo:.1f}%)</td>
+        <td style="padding:8px;">${tot_base:,.2f} ({tot_pct_base:.1f}%)</td>
+        <td style="padding:8px;">${tot_campo:,.2f} ({tot_pct_campo:.1f}%)</td>
+        <td style="padding:8px;">${tot_central:,.2f} ({tot_pct_central:.1f}%)</td>
+        <td style="padding:8px; color:#065F46; background:#A7F3D0;">${tot_final:,.2f} (100%)</td>
+        <td style="padding:8px; color:#0F172A;">${tot_iva:,.2f}</td>
+    </tr>
+    """
+
+    st.markdown(f"""
+    <div style="overflow-x:auto; margin-bottom:16px;">
+        <table style="width:100%; border-collapse:collapse; border:1px solid #CBD5E1; font-family:'Montserrat', sans-serif;">
+            <thead>
+                <tr style="background:#FDE68A; color:#0F172A; text-align:center; font-weight:800; font-size:11.5px; border-bottom:2px solid #D97706;">
+                    <th style="padding:8px; border:1px solid #CBD5E1;">Partida</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">Materiales Directos</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">Maquinaria y Equipo</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">Mano de Obra</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">COSTO UNITARIO BASE</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">Indirecto de campo</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">Indirecto Central</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">PRECIO UNITARIO FINAL</th>
+                    <th style="padding:8px; border:1px solid #CBD5E1;">Total con IVA</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+                {total_row_html}
+            </tbody>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+    excel_bytes = generate_tpu_dashboard_excel(cot_info, partidas)
+    if excel_bytes:
+        st.download_button(
+            label="📊 EXPORTAR DASHBOARD DE MATRIZ TPU A EXCEL (.XLSX)",
+            data=excel_bytes,
+            file_name=f"{re.sub(r'[^a-zA-Z0-9_-]', '_', cot_info.get('folio','COT')).strip('_')}_Dashboard_Matriz_TPU.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="secondary",
+            key="btn_download_tpu_dashboard_excel"
+        )
+
+
 def generate_tpu_pdf_oficial(cot_info, partidas):
     """
     Genera un PDF membretado oficial con la hoja membretada J&D (hoja_membretada.png)
@@ -424,7 +655,7 @@ def render_tpu_generator():
     """
     Renderiza la interfaz interactiva oficial de Tarjetas de Precios Unitarios (TPU)
     idéntica a la pantalla solicitada por el usuario con controles [-] [+] e integrando Maquinaria.
-    Soporta Ajuste Individual por Partida y Ajuste Global Masivo (Todas las Partidas a la vez).
+    Soporta Dashboard Resumen por Cotización, Ajuste Individual por Partida y Ajuste Global Masivo.
     """
     st.markdown("""
     <style>
@@ -469,7 +700,7 @@ def render_tpu_generator():
                 border-radius:8px; padding:16px 20px; margin-bottom:18px;">
         <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 PANTALLA UNIFICADA DE AJUSTE Y BALANCE TPU</h3>
         <p style="margin:4px 0 0 0; color:{BRAND_CHARCOAL_MED}; font-size:12px;">
-            Ajusta Materiales, Mano de Obra y Maquinaria. Permite <b>Ajustar Partidas Individuales</b> o <b>Ajustar Todas las Partidas al Mismo Tiempo (Global)</b>.
+            Inspecciona el <b>Dashboard Resumen de Matriz TPU</b> por Cotización y realiza <b>Ajustes Individuales</b> o <b>Ajustes Masivos Globables</b>.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -489,7 +720,7 @@ def render_tpu_generator():
         return
 
     cot_options = {f"{c['folio']} - {c['proyecto']} ({c.get('cliente','—')})": c['id'] for c in cotizaciones}
-    selected_label = st.selectbox("📌 Seleccionar Cotización Activa para Ajustar TPU", list(cot_options.keys()))
+    selected_label = st.selectbox("📌 Seleccionar Cotización Activa para Filtrar Dashboard y Tarjetas TPU", list(cot_options.keys()))
     cot_id = cot_options[selected_label]
 
     conn = get_connection()
@@ -504,6 +735,10 @@ def render_tpu_generator():
     if not partidas:
         st.info("La cotización seleccionada no tiene partidas registradas aún.")
         return
+
+    # ── DASHBOARD MATRIZ RESUMEN FILTRADA POR COTIZACIÓN ──
+    render_tpu_dashboard_summary(cot_info, partidas)
+    st.divider()
 
     clean_f = re.sub(r'[^a-zA-Z0-9_-]', '_', cot_info.get('folio', 'COT-001')).strip('_')
     tpu_pdf_bytes = generate_tpu_pdf_oficial(cot_info, partidas)
