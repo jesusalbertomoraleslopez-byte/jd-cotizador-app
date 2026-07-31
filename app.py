@@ -112,6 +112,11 @@ with st.sidebar:
 
 # ─── RENDER_HEADER CORPORATIVO ───
 def render_header(title, subtitle=""):
+    banner_path = os.path.join(ASSETS_DIR, "banner_corporativo.png")
+    if os.path.exists(banner_path):
+        st.image(banner_path, use_container_width=True)
+        st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+
     logo_path = LOGO_CORP if os.path.exists(LOGO_CORP) else None
     col_logo, col_title = st.columns([1, 5])
     with col_logo:
