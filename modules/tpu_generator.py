@@ -898,19 +898,24 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             def draw_page_decorations(self, page_count):
                 self.saveState()
                 bold_f, reg_f = _get_jd_fonts()
-                self.setFont(reg_f, 8)
+                # Pie de página subido para que no se empalme con el membrete inferior J&D
+                self.setFont(reg_f, 7.5)
                 self.setFillColor(colors.HexColor('#64748B'))
-                self.drawString(36, 30, f"Propuesta Técnica y Comercial: {cot_info.get('proyecto','—')} | Ref: {cot_info.get('folio','—')}")
-                self.drawRightString(612 - 36, 30, f"Página {self._pageNumber} de {page_count}")
+                self.drawString(36, 54, f"Propuesta Técnica y Comercial: {cot_info.get('proyecto','—')} | Ref: {cot_info.get('folio','—')}")
+                self.drawRightString(612 - 36, 54, f"Página {self._pageNumber} de {page_count}")
+                # Línea separadora sobre el pie de página
+                self.setStrokeColor(colors.HexColor('#E2E8F0'))
+                self.setLineWidth(0.5)
+                self.line(36, 64, 612 - 36, 64)
                 self.restoreState()
 
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
-            leftMargin=36,
-            rightMargin=36,
-            topMargin=90,   # Espacio adecuado para evitar empalme con membrete superior J&D
-            bottomMargin=50 # Espacio adecuado para evitar empalme con pie de página J&D
+            leftMargin=40,
+            rightMargin=40,
+            topMargin=120,   # Espacio generoso para que el membrete J&D respire sin empalme
+            bottomMargin=72  # Espacio para pie de pagina sin empalme con membrete inferior
         )
         bold_f, reg_f = _get_jd_fonts()
 
