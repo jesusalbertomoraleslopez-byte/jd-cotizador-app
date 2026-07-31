@@ -165,13 +165,14 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
         monto_ind_central = costo_unitario_base * (ind_central_pct / 100.0)
         monto_utilidad = costo_unitario_base * (utilidad_pct / 100.0)
     else:
-        monto_ind_campo = diferencia_indirectos * 0.20
-        monto_ind_central = diferencia_indirectos * 0.40
-        monto_utilidad = diferencia_indirectos * 0.40
+        # Estándar J&D: Indirecto de Campo ~ 5.00%, Indirecto Central ~ 12.00%, Utilidad absorbe el saldo
+        monto_ind_campo = costo_unitario_base * 0.0500
+        monto_ind_central = costo_unitario_base * 0.1200
+        monto_utilidad = max(0.0, diferencia_indirectos - monto_ind_campo - monto_ind_central)
 
-        ind_campo_pct = (monto_ind_campo / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 7.0
-        ind_central_pct = (monto_ind_central / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
-        utilidad_pct = (monto_utilidad / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
+        ind_campo_pct = 5.00
+        ind_central_pct = 12.00
+        utilidad_pct = (monto_utilidad / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 8.00
 
     precio_unitario_final = costo_unitario_base + monto_ind_campo + monto_ind_central + monto_utilidad
 
@@ -529,17 +530,17 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
     dif_ind = max(0.0, target_price - costo_base)
 
     if baja_sel == "ind_campo":
-        m_ind_campo = dif_ind
-        m_ind_central = 0.0
-        m_utilidad = 0.0
+        m_ind_central = costo_base * 0.1200
+        m_utilidad = max(0.0, dif_ind * 0.35)
+        m_ind_campo = max(0.0, dif_ind - m_ind_central - m_utilidad)
     elif baja_sel == "ind_central":
-        m_ind_campo = 0.0
-        m_ind_central = dif_ind
-        m_utilidad = 0.0
-    else: # 'utilidad'
-        m_ind_campo = 0.0
-        m_ind_central = 0.0
-        m_utilidad = dif_ind
+        m_ind_campo = costo_base * 0.0500
+        m_utilidad = max(0.0, dif_ind * 0.35)
+        m_ind_central = max(0.0, dif_ind - m_ind_campo - m_utilidad)
+    else: # 'utilidad' (Default compensator)
+        m_ind_campo = costo_base * 0.0500
+        m_ind_central = costo_base * 0.1200
+        m_utilidad = max(0.0, dif_ind - m_ind_campo - m_ind_central)
 
     p_ind_campo = (m_ind_campo / costo_base * 100.0) if costo_base > 0 else 0.0
     p_ind_central = (m_ind_central / costo_base * 100.0) if costo_base > 0 else 0.0
