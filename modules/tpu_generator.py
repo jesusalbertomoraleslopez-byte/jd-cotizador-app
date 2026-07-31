@@ -18,7 +18,7 @@ from config import (BRAND_ORANGE, BRAND_CHARCOAL, BRAND_CHARCOAL_MED, BRAND_WHIT
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
@@ -478,8 +478,8 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             pagesize=letter,
             leftMargin=36,
             rightMargin=36,
-            topMargin=54,
-            bottomMargin=54
+            topMargin=90,   # Espacio adecuado para evitar empalme con membrete superior J&D
+            bottomMargin=50 # Espacio adecuado para evitar empalme con pie de página J&D
         )
         bold_f, reg_f = _get_jd_fonts()
 
@@ -489,15 +489,11 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 
         story = []
 
-        story.append(Paragraph("<b>DESGLOSE OFICIAL DE TARJETAS DE PRECIOS UNITARIOS (TPU)</b>", ParagraphStyle('Title', fontName=bold_f, fontSize=13, leading=16, textColor=colors.HexColor('#FE8C29'))))
-        story.append(Paragraph(f"Proyecto: <b>{cot_info.get('proyecto','—')}</b> &bull; Folio: <b>{cot_info.get('folio','—')}</b> &bull; Revisión: <b>{cot_info.get('revision','R0')}</b>", normal_style))
-        story.append(Spacer(1, 14))
-
         idx = 0
         for p in partidas:
             idx += 1
             if idx > 1:
-                story.append(Spacer(1, 14))
+                story.append(PageBreak())
 
             p_id = p['id']
             conn = get_connection(); cur = conn.cursor()
@@ -513,9 +509,30 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 
             tpu = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
 
+            # ── CABECERA CON DATOS GENERALES DE LA COTIZACIÓN EN CADA HOJA ──
+            meta_box_data = [
+                [
+                    Paragraph(f"<b>DESGLOSE DE PRECIO UNITARIO (TPU)</b>", ParagraphStyle('M1', fontName=bold_f, fontSize=9.5, textColor=colors.HexColor('#FE8C29'))),
+                    Paragraph(f"Ref / Folio: <b>{cot_info.get('folio','—')}</b>", ParagraphStyle('M2', fontName=bold_f, fontSize=8.5, alignment=2, textColor=colors.HexColor('#0F172A')))
+                ],
+                [
+                    Paragraph(f"Proyecto: <b>{cot_info.get('proyecto','—')}</b>", ParagraphStyle('M3', fontName=reg_f, fontSize=8, textColor=colors.HexColor('#334155'))),
+                    Paragraph(f"Cliente: <b>{cot_info.get('cliente','—')}</b> &nbsp;|&nbsp; Rev: <b>{cot_info.get('revision','R0')}</b>", ParagraphStyle('M4', fontName=reg_f, fontSize=8, alignment=2, textColor=colors.HexColor('#334155')))
+                ]
+            ]
+            t_meta = Table(meta_box_data, colWidths=[320, 220])
+            t_meta.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#FFF7ED')),
+                ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#FED7AA')),
+                ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#FFEDD5')),
+                ('PADDING', (0,0), (-1,-1), 4),
+            ]))
+            story.append(t_meta)
+            story.append(Spacer(1, 10))
+
             story.append(Paragraph(f"<b>Partida {tpu['numero_partida']:04d}:</b> {tpu['nombre_partida']}", phead_style))
-            story.append(Paragraph(f"Unidad: {tpu['unidad']} | Horas: {tpu['horas_hh_unitarias']:.5f} hrs | Alcance: {tpu['descripcion']}", normal_style))
-            story.append(Spacer(1, 4))
+            story.append(Paragraph(f"Unidad: {tpu['unidad']} | Rendimiento H-H: {tpu['horas_hh_unitarias']:.4f} hrs | Alcance: {tpu['descripcion']}", normal_style))
+            story.append(Spacer(1, 6))
 
             # Tabla Materiales
             mat_table_data = [[Paragraph("<b>Material</b>", header_style), Paragraph("<b>Unidad</b>", header_style), Paragraph("<b>Cantidad</b>", header_style), Paragraph("<b>Costo</b>", header_style), Paragraph("<b>Importe</b>", header_style)]]
