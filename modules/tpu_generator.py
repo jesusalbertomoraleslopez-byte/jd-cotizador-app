@@ -431,14 +431,28 @@ def render_tpu_generator():
     # Botón de Descarga Oficial de TPU en PDF dentro del Módulo 6
     clean_f = re.sub(r'[^a-zA-Z0-9_-]', '_', cot_info.get('folio', 'COT-001')).strip('_')
     tpu_pdf_bytes = generate_tpu_pdf_oficial(cot_info, partidas)
+
+    st.markdown(f"""
+    <div style="background:{BRAND_GRAY_BG}; border:2px solid {BRAND_ORANGE}; border-radius:10px; padding:16px 20px; margin:16px 0;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+            <span style="font-size:22px;">🎴</span>
+            <span style="font-size:16px; font-weight:900; color:{BRAND_CHARCOAL};">EXPORTACIÓN OFICIAL DE TARJETAS DE PRECIOS UNITARIOS</span>
+        </div>
+        <p style="font-size:12px; color:{BRAND_CHARCOAL_MED}; margin:0 0 12px 0;">
+            Descarga el reporte completo en formato PDF membretado con todas las Tarjetas de Precios Unitarios (TPU) de la cotización <b>{cot_info.get('folio')}</b>.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
     if tpu_pdf_bytes:
         st.download_button(
-            label="🎴 DESCARGAR TARJETAS DE PRECIOS UNITARIOS (.PDF)",
+            label="⬇️ 🎴 DESCARGAR DOCUMENTO DE TARJETAS TPU (.PDF)",
             data=tpu_pdf_bytes,
             file_name=f"{clean_f}_Tarjetas_Precios_Unitarios.pdf",
             mime="application/pdf",
             type="primary",
-            use_container_width=True
+            use_container_width=True,
+            key="btn_download_tpu_pdf_mod6"
         )
 
     st.divider()

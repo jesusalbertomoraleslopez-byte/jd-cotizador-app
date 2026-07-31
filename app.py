@@ -171,7 +171,9 @@ elif "Cierre" in menu_option:
 elif "TPU" in menu_option:
     render_header("Tarjetas de Precios Unitarios (TPU)",
                   "Desglose ejecutivo del costo unitario y precio de venta por concepto")
-    render_tpu_generator()
+    import importlib, modules.tpu_generator
+    importlib.reload(modules.tpu_generator)
+    modules.tpu_generator.render_tpu_generator()
 
 elif "Mantenimiento" in menu_option:
     render_header("Área de Mantenimiento y Almacenamiento",
