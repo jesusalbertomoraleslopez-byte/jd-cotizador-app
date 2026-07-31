@@ -1,7 +1,7 @@
 """
 Módulo de Tarjetas de Precios Unitarios (TPU) — J&D Automation Industries
-Generación e inspección detallada de TPU por partida con pantalla interactiva de ajuste en línea.
-Integra Maquinaria y Equipo como rubro directo del Costo = (Material + Mano de Obra + Maquinaria).
+Generación e inspección detallada de TPU por partida con ajuste individual y ajuste global/masivo.
+Ajusta Indirecto de campo por default al 7.00% e Indirecto Central al 12.00%.
 """
 
 import streamlit as st
@@ -49,7 +49,8 @@ def _get_jd_fonts():
 def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, gastos_partida=0.0):
     """
     Calcula todos los componentes de la Tarjeta TPU integrando Maquinaria como rubro directo
-    junto a Materiales y Mano de Obra: COSTO BASE = (Materiales + MO + Maquinaria + Subcontratos + Gastos).
+    junto a Materiales y Mano de Obra, fijando el Indirecto de Campo por default al 7.00%
+    e Indirecto Central al 12.00%.
     """
     cant_partida = float(p.get('cantidad', 1.0) or 1.0)
     if cant_partida <= 0:
@@ -160,7 +161,7 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     # COSTO UNITARIO BASE = Materiales + MO (con Factores) + Maquinaria + Sub + Gastos
     costo_unitario_base = costo_mat_unitario + precio_unitario_mo_factor + costo_maq_unitario + total_sub + total_gas
 
-    # 6. PRECIO TARGET Y BALANCE DE INDIRECTOS
+    # 6. PRECIO TARGET Y BALANCE DE INDIRECTOS (Default: Campo 7.00%, Central 12.00%)
     pv_registrado = float(p.get('precio_venta', 0) or 0)
     if pv_registrado > 0:
         precio_unitario_target = pv_registrado / cant_partida
@@ -184,12 +185,12 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
         monto_ind_central = costo_unitario_base * (ind_central_pct / 100.0)
         monto_utilidad = costo_unitario_base * (utilidad_pct / 100.0)
     else:
-        # Estándar J&D: Indirecto de Campo ~ 5.00%, Indirecto Central ~ 12.00%, Utilidad absorbe el saldo
-        monto_ind_campo = costo_unitario_base * 0.0500
+        # Estándar J&D: Indirecto de Campo ~ 7.00%, Indirecto Central ~ 12.00%, Utilidad absorbe el saldo
+        monto_ind_campo = costo_unitario_base * 0.0700
         monto_ind_central = costo_unitario_base * 0.1200
         monto_utilidad = max(0.0, diferencia_indirectos - monto_ind_campo - monto_ind_central)
 
-        ind_campo_pct = 5.00
+        ind_campo_pct = 7.00
         ind_central_pct = 12.00
         utilidad_pct = (monto_utilidad / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 8.00
 
@@ -423,13 +424,14 @@ def render_tpu_generator():
     """
     Renderiza la interfaz interactiva oficial de Tarjetas de Precios Unitarios (TPU)
     idéntica a la pantalla solicitada por el usuario con controles [-] [+] e integrando Maquinaria.
+    Soporta Ajuste Individual por Partida y Ajuste Global Masivo (Todas las Partidas a la vez).
     """
     st.markdown(f"""
     <div style="background:{BRAND_WHITE}; border:1px solid {BRAND_BORDER_LIGHT}; border-left:5px solid {BRAND_ORANGE};
                 border-radius:8px; padding:16px 20px; margin-bottom:18px;">
         <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 PANTALLA UNIFICADA DE AJUSTE Y BALANCE TPU</h3>
         <p style="margin:4px 0 0 0; color:{BRAND_CHARCOAL_MED}; font-size:12px;">
-            Ajusta Materiales, Mano de Obra y <b>Maquinaria y Equipo</b>. Selecciona <b>☑️ SUBE</b> y <b>☑️ BAJA</b> manteniendo el PRECIO UNITARIO FINAL 100% FIJO.
+            Ajusta Materiales, Mano de Obra y Maquinaria. Permite <b>Ajustar Partidas Individuales</b> o <b>Ajustar Todas las Partidas al Mismo Tiempo (Global)</b>.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -493,14 +495,113 @@ def render_tpu_generator():
 
     st.divider()
 
-    partida_opts = {f"Partida {p['numero_partida']:04d}: {p['descripcion'][:50]}": p['id'] for p in partidas}
-    partida_opts["🌟 TODAS LAS PARTIDAS (REPORTE CONSOLIDADO DE TPU)"] = "ALL"
+    # ── SELECTOR DE MODO: INDIVIDUAL VS GLOBAL (TODAS A LA VEZ) ──
+    mode_selection = st.radio(
+        "🎛️ **Selecciona el Alcance del Ajuste de TPU:**",
+        ["📌 Ajuste por Partida Individual", "🌐 Ajuste Global (Todas las Partidas a la vez)"],
+        horizontal=True
+    )
 
-    p_label = st.selectbox("🎯 Seleccionar Partida para Generar y Ajustar Tarjeta TPU", list(partida_opts.keys()))
-    selected_p_id = partida_opts[p_label]
+    if "Global" in mode_selection:
+        st.markdown(f"""
+        <div style="background:#FFF7ED; border:2px solid #FE8C29; border-radius:10px; padding:18px; margin-bottom:20px;">
+            <h4 style="margin:0 0 6px 0; color:#FE8C29;">🌐 AJUSTE MASIVO / GLOBAL PARA TODAS LAS PARTIDAS ({len(partidas)} Partidas)</h4>
+            <p style="margin:0; font-size:12.5px; color:#475569;">
+                Aplica los mismos porcentajes de <b>Supervisión</b>, <b>Herramienta</b>, <b>Rendimiento</b> y <b>Compensador</b> a todas las partidas del proyecto a la vez. El PRECIO UNITARIO FINAL de cada partida permanece <b>100% FIJO Y BLOQUEADO</b>.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    if selected_p_id == "ALL":
-        st.markdown(f"### 📋 Reporte Consolidado de Tarjetas TPU ({len(partidas)} Partidas)")
+        col_g1, col_g2, col_g3 = st.columns([1, 1, 1])
+        with col_g1:
+            g_sup = st.number_input("👷 Supervisión Global % (sobre MO)", value=62.0, min_value=0.0, max_value=120.0, step=1.0)
+            g_hta = st.number_input("🛠️ Herramienta Global % (sobre MO)", value=6.0, min_value=0.0, max_value=30.0, step=0.5)
+
+        with col_g2:
+            g_hh = st.number_input("⏱️ Multiplicador H-H Global (Rendimiento)", value=1.0, min_value=0.2, max_value=5.0, step=0.05)
+            g_baja = st.selectbox("🔴 Rubro Compensador Global (Absorbe la diferencia)", [
+                "Indirecto de Campo",
+                "Indirecto Central",
+                "Utilidad"
+            ], index=0)
+
+        with col_g3:
+            st.markdown("<p style='font-size:12px; font-weight:800; color:#334155; margin-top:24px;'>⚡ RESUMEN DE APLICACIÓN MASIVA:</p>", unsafe_allow_html=True)
+            st.info(f"Se actualizarán **{len(partidas)} partidas** fijando Indirecto de Campo ~7.00%, Central ~12.00% y compensando en **{g_baja}**.")
+
+        st.markdown("---")
+        if st.button("🌐 APLICAR Y GUARDAR EN TODAS LAS PARTIDAS DEL PROYECTO", type="primary", key="btn_save_global_tpu"):
+            conn = get_connection()
+            cur = conn.cursor()
+
+            for p in partidas:
+                pid = p['id']
+                cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (pid,))
+                mats = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (pid,))
+                mo = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (pid,))
+                sub = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (pid,))
+                maq = [dict(r) for r in cur.fetchall()]
+
+                cant_partida = float(p.get('cantidad', 1.0) or 1.0)
+                tot_mat = sum(float(m.get('cantidad',1))*float(m.get('precio_unitario_mxn',0)) for m in mats) / cant_partida
+                tot_mo = sum(int(o.get('cantidad_personal',1))*float(o.get('sueldo_base_semanal',0))*float(o.get('fasar',1.45))*float(o.get('sobre_sueldo',1.0))*float(o.get('semanas',1.0)) for o in mo) * g_hh / cant_partida
+                tot_maq = sum(float(mq.get('total_mxn',0)) for mq in maq) / cant_partida
+                tot_sub = sum(float(s.get('importe_mxn',0)) for s in sub) / cant_partida
+
+                c_base = tot_mat + (tot_mo * (1.0 + (g_hta/100.0) + (g_sup/100.0))) + tot_maq + tot_sub
+                pv_reg = float(p.get('precio_venta',0) or 0)
+                t_target = (pv_reg / cant_partida) if pv_reg > 0 else (c_base / 0.65)
+                dif_ind = max(0.0, t_target - c_base)
+
+                if "Campo" in g_baja:
+                    m_central = c_base * 0.1200
+                    m_util = max(0.0, dif_ind * 0.35)
+                    m_campo = max(0.0, dif_ind - m_central - m_util)
+                elif "Central" in g_baja:
+                    m_campo = c_base * 0.0700
+                    m_util = max(0.0, dif_ind * 0.35)
+                    m_central = max(0.0, dif_ind - m_campo - m_util)
+                else: # Utilidad
+                    m_campo = c_base * 0.0700
+                    m_central = c_base * 0.1200
+                    m_util = max(0.0, dif_ind - m_campo - m_central)
+
+                p_campo = (m_campo / c_base * 100.0) if c_base > 0 else 7.0
+                p_central = (m_central / c_base * 100.0) if c_base > 0 else 12.0
+                p_util = (m_util / c_base * 100.0) if c_base > 0 else 8.0
+
+                cur.execute("""
+                    INSERT INTO cotizacion_tpu_custom
+                    (cotizacion_id, partida_id, herramienta_pct, supervision_pct, ind_campo_pct, ind_central_pct, utilidad_pct, horas_hh_factor)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(partida_id) DO UPDATE SET
+                        herramienta_pct = excluded.herramienta_pct,
+                        supervision_pct = excluded.supervision_pct,
+                        ind_campo_pct = excluded.ind_campo_pct,
+                        ind_central_pct = excluded.ind_central_pct,
+                        utilidad_pct = excluded.utilidad_pct,
+                        horas_hh_factor = excluded.horas_hh_factor,
+                        fecha_actualizacion = CURRENT_TIMESTAMP
+                """, (
+                    cot_id, pid, g_hta, g_sup, p_campo, p_central, p_util, g_hh
+                ))
+
+            conn.commit()
+            conn.close()
+
+            try:
+                from database.storage_manager import auto_sync_database_and_storage_to_github
+                auto_sync_database_and_storage_to_github("Guardar ajuste masivo global TPU para cotizacion #" + str(cot_id))
+            except Exception:
+                pass
+
+            st.success("¡Ajuste global aplicado exitosamente a TODAS las partidas del proyecto!")
+            st.rerun()
+
+        st.markdown("### 📋 Vista Previa Consolidada de Todas las Partidas:")
         for p in partidas:
             p_id = p['id']
             conn = get_connection(); cur = conn.cursor()
@@ -519,21 +620,47 @@ def render_tpu_generator():
             st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     else:
-        p_info = next(p for p in partidas if p['id'] == selected_p_id)
+        partida_opts = {f"Partida {p['numero_partida']:04d}: {p['descripcion'][:50]}": p['id'] for p in partidas}
+        partida_opts["🌟 TODAS LAS PARTIDAS (REPORTE CONSOLIDADO DE TPU)"] = "ALL"
 
-        conn = get_connection(); cur = conn.cursor()
-        cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (selected_p_id,))
-        mats = [dict(r) for r in cur.fetchall()]
-        cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (selected_p_id,))
-        mo = [dict(r) for r in cur.fetchall()]
-        cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (selected_p_id,))
-        sub = [dict(r) for r in cur.fetchall()]
-        cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (selected_p_id,))
-        maq = [dict(r) for r in cur.fetchall()]
-        conn.close()
+        p_label = st.selectbox("🎯 Seleccionar Partida para Generar y Ajustar Tarjeta TPU", list(partida_opts.keys()))
+        selected_p_id = partida_opts[p_label]
 
-        tpu_data = calcular_tpu_partida(p_info, cot_info, mats, mo, sub, maq)
-        render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=False)
+        if selected_p_id == "ALL":
+            st.markdown(f"### 📋 Reporte Consolidado de Tarjetas TPU ({len(partidas)} Partidas)")
+            for p in partidas:
+                p_id = p['id']
+                conn = get_connection(); cur = conn.cursor()
+                cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (p_id,))
+                mats = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (p_id,))
+                mo = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (p_id,))
+                sub = [dict(r) for r in cur.fetchall()]
+                cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (p_id,))
+                maq = [dict(r) for r in cur.fetchall()]
+                conn.close()
+
+                tpu_data = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
+                render_unified_tpu_card_screen(tpu_data, cot_info, p, is_read_only=True)
+                st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
+
+        else:
+            p_info = next(p for p in partidas if p['id'] == selected_p_id)
+
+            conn = get_connection(); cur = conn.cursor()
+            cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (selected_p_id,))
+            mats = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (selected_p_id,))
+            mo = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (selected_p_id,))
+            sub = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (selected_p_id,))
+            maq = [dict(r) for r in cur.fetchall()]
+            conn.close()
+
+            tpu_data = calcular_tpu_partida(p_info, cot_info, mats, mo, sub, maq)
+            render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=False)
 
 
 def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=False):
@@ -543,7 +670,6 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
     """
     pid = tpu_data['partida_id']
 
-    # Inicializar estado en session_state
     if f"sup_{pid}" not in st.session_state:
         st.session_state[f"sup_{pid}"] = float(tpu_data['sup_pct'])
     if f"hta_{pid}" not in st.session_state:
@@ -564,7 +690,7 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
 
     target_price = tpu_data['precio_unitario_target']
 
-    # Recálculos en vivo integrando Maquinaria en el Costo Directo Base
+    # Recálculos en vivo integrando Maquinaria en el Costo Directo Base (Default Campo ~ 7.00%, Central ~ 12.00%)
     c_mo_u = tpu_data['costo_mo_unitario'] * hh_val
     m_hta_u = c_mo_u * (hta_val / 100.0)
     m_sup_u = c_mo_u * (sup_val / 100.0)
@@ -578,17 +704,17 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
         m_utilidad = max(0.0, dif_ind * 0.35)
         m_ind_campo = max(0.0, dif_ind - m_ind_central - m_utilidad)
     elif baja_sel == "ind_central":
-        m_ind_campo = costo_base * 0.0500
+        m_ind_campo = costo_base * 0.0700
         m_utilidad = max(0.0, dif_ind * 0.35)
         m_ind_central = max(0.0, dif_ind - m_ind_campo - m_utilidad)
     else: # 'utilidad' (Default compensator)
-        m_ind_campo = costo_base * 0.0500
+        m_ind_campo = costo_base * 0.0700
         m_ind_central = costo_base * 0.1200
         m_utilidad = max(0.0, dif_ind - m_ind_campo - m_ind_central)
 
-    p_ind_campo = (m_ind_campo / costo_base * 100.0) if costo_base > 0 else 0.0
-    p_ind_central = (m_ind_central / costo_base * 100.0) if costo_base > 0 else 0.0
-    p_utilidad = (m_utilidad / costo_base * 100.0) if costo_base > 0 else 0.0
+    p_ind_campo = (m_ind_campo / costo_base * 100.0) if costo_base > 0 else 7.0
+    p_ind_central = (m_ind_central / costo_base * 100.0) if costo_base > 0 else 12.0
+    p_utilidad = (m_utilidad / costo_base * 100.0) if costo_base > 0 else 8.0
 
     precio_final_sim = costo_base + m_ind_campo + m_ind_central + m_utilidad
     letras_sim = numero_a_letras_mxn(precio_final_sim, cot_info.get('moneda_cotizacion','MXN'))
