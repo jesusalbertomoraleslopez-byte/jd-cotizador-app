@@ -1,7 +1,7 @@
 """
 Módulo de Tarjetas de Precios Unitarios (TPU) — J&D Automation Industries
 Generación e inspección detallada de TPU por partida con pantalla interactiva de ajuste en línea.
-Permite modificar Herramienta, Supervisión, Rendimiento H-H e Indirectos en la misma tarjeta con la simbología [-] [+] [☑️].
+Implementa la regla de selección de 2 casillas (1 para SUBIR y 1 para BAJAR) en una sola pantalla unificada.
 """
 
 import streamlit as st
@@ -48,9 +48,7 @@ def _get_jd_fonts():
 
 def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, gastos_partida=0.0):
     """
-    Calcula matemáticamente todos los componentes de la Tarjeta de Precio Unitario (TPU)
-    para una partida de proyecto garantizando el COINCIDENCIA 100% (MATCH)
-    con el Precio de Venta de la tabla de costos principal de la cotización.
+    Calcula todos los componentes de la Tarjeta TPU garantizando MATCH 100% con la cotización.
     """
     cant_partida = float(p.get('cantidad', 1.0) or 1.0)
     if cant_partida <= 0:
@@ -99,7 +97,6 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
         sobre = float(o.get('sobre_sueldo', 1.0) or 1.0)
         semanas = float(o.get('semanas', 1.0) or 1.0)
 
-        # Costo Hora-Hombre = (Sueldo * FASAR * SobreSueldo) / 48 hrs
         costo_hh = (sueldo * fasar * sobre) / 48.0 if sueldo > 0 else 0.0
         horas_totales = pers * semanas * 48.0 * hh_factor
         horas_unitarias = horas_totales / cant_partida
@@ -119,7 +116,7 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     costo_mo_unitario = total_mo_partida / cant_partida
     horas_hh_unitarias = total_hh_partida / cant_partida
 
-    # 3. PORCENTAJES DE HERRAMIENTA Y SUPERVISIÓN SOBRE MANO DE OBRA
+    # 3. PORCENTAJES DE HERRAMIENTA Y SUPERVISIÓN
     if custom_tpu_dict.get('herramienta_pct') is not None:
         hta_pct = float(custom_tpu_dict['herramienta_pct']) / 100.0 if float(custom_tpu_dict['herramienta_pct']) > 1.0 else float(custom_tpu_dict['herramienta_pct'])
     else:
@@ -135,18 +132,16 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     monto_herramienta_unitario = costo_mo_unitario * hta_pct
     monto_supervision_unitario = costo_mo_unitario * sup_pct
 
-    # Subtotal Mano de Obra con Factores
     precio_unitario_mo_factor = costo_mo_unitario + monto_herramienta_unitario + monto_supervision_unitario
 
-    # 4. SUBCONTRATOS, MAQUINARIA Y GASTOS (Asignados por unidad)
+    # 4. SUBCONTRATOS, MAQUINARIA Y GASTOS
     total_sub = sum(float(s.get('importe_mxn', 0) or 0) for s in subcontratos) / cant_partida
     total_maq = sum(float(mq.get('total_mxn', 0) or 0) for mq in maquinaria) / cant_partida
     total_gas = gastos_partida / cant_partida
 
-    # COSTO UNITARIO BASE
     costo_unitario_base = costo_mat_unitario + precio_unitario_mo_factor + total_sub + total_maq + total_gas
 
-    # 5. GARANTIZAR MATCH CON EL PRECIO DE VENTA OFICIAL DE LA COTIZACIÓN
+    # 5. PRECIO TARGET Y BALANCE DE INDIRECTOS
     pv_registrado = float(p.get('precio_venta', 0) or 0)
     if pv_registrado > 0:
         precio_unitario_target = pv_registrado / cant_partida
@@ -161,7 +156,6 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
 
     diferencia_indirectos = precio_unitario_target - costo_unitario_base
 
-    # Revisar si existen porcentajes explícitos guardados en la BD
     if custom_tpu_dict.get('ind_campo_pct') is not None and custom_tpu_dict.get('ind_central_pct') is not None and custom_tpu_dict.get('utilidad_pct') is not None:
         ind_campo_pct = float(custom_tpu_dict['ind_campo_pct'])
         ind_central_pct = float(custom_tpu_dict['ind_central_pct'])
@@ -356,7 +350,7 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             story.append(t_mo)
             story.append(Spacer(1, 6))
 
-            # Resumen Final TPU con MATCH exacto al PDF de la cotización
+            # Resumen Final TPU
             tot_table_data = [
                 [Paragraph("<b>COSTO UNITARIO BASE</b>", ParagraphStyle('B', fontName=bold_f, fontSize=8.5)), Paragraph(f"<b>${tpu['costo_unitario_base']:,.2f}</b>", ParagraphStyle('BR', fontName=bold_f, fontSize=8.5, alignment=2))],
                 [Paragraph(f"Indirecto de Campo ({tpu['ind_campo_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_ind_campo']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
@@ -383,14 +377,14 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 def render_tpu_generator():
     """
     Renderiza la interfaz interactiva oficial de Tarjetas de Precios Unitarios (TPU)
-    idéntica a la pantalla solicitada por el usuario con controles [-] [+] [☑️] integrados en la tarjeta.
+    idéntica a la pantalla solicitada por el usuario con controles [-] [+] y regla de 2 casillas (1 SUBIR, 1 BAJAR).
     """
     st.markdown(f"""
     <div style="background:{BRAND_WHITE}; border:1px solid {BRAND_BORDER_LIGHT}; border-left:5px solid {BRAND_ORANGE};
                 border-radius:8px; padding:16px 20px; margin-bottom:18px;">
-        <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 AJUSTADOR Y BALANCEADOR DINÁMICO DE TARJETAS TPU</h3>
+        <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 PANTALLA UNIFICADA DE AJUSTE Y BALANCE TPU</h3>
         <p style="margin:4px 0 0 0; color:{BRAND_CHARCOAL_MED}; font-size:12px;">
-            Ajusta en tiempo real los rendimientos, Herramienta %, Supervisión % e Indirectos en la misma tarjeta. El PRECIO UNITARIO FINAL permanece 100% FIJO Y BLOQUEADO.
+            Selecciona la casilla <b>☑️ SUBE</b> (Driver que aumenta) y la casilla <b>☑️ BAJA</b> (Rubro que absorbe el cambio). El PRECIO UNITARIO FINAL permanece 100% FIJO.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -410,7 +404,7 @@ def render_tpu_generator():
         return
 
     cot_options = {f"{c['folio']} - {c['proyecto']} ({c.get('cliente','—')})": c['id'] for c in cotizaciones}
-    selected_label = st.selectbox("📌 Seleccionar Cotización Activa para Inspeccionar y Ajustar TPU", list(cot_options.keys()))
+    selected_label = st.selectbox("📌 Seleccionar Cotización Activa para Ajustar TPU", list(cot_options.keys()))
     cot_id = cot_options[selected_label]
 
     conn = get_connection()
@@ -426,7 +420,6 @@ def render_tpu_generator():
         st.info("La cotización seleccionada no tiene partidas registradas aún.")
         return
 
-    # Botón de Descarga Oficial de TPU en PDF dentro del Módulo 6
     clean_f = re.sub(r'[^a-zA-Z0-9_-]', '_', cot_info.get('folio', 'COT-001')).strip('_')
     tpu_pdf_bytes = generate_tpu_pdf_oficial(cot_info, partidas)
 
@@ -477,7 +470,7 @@ def render_tpu_generator():
             conn.close()
 
             tpu_data = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
-            render_interactive_tpu_card(tpu_data, cot_info, p, is_read_only=True)
+            render_unified_tpu_card_screen(tpu_data, cot_info, p, is_read_only=True)
             st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     else:
@@ -495,34 +488,38 @@ def render_tpu_generator():
         conn.close()
 
         tpu_data = calcular_tpu_partida(p_info, cot_info, mats, mo, sub, maq)
-        render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False)
+        render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=False)
 
 
-def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
+def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=False):
     """
-    Renderiza la Tarjeta TPU Interactiva con controles [-] [+] [☑️] en cada fila
-    fiel a la pantalla solicitada en el prototipo del usuario.
+    Renderiza la Pantalla Única de Ajuste TPU idéntica a la imagen de prototipo del usuario.
+    Regla: Permite seleccionar 2 casillas globales (1 para SUBIR y 1 para BAJAR).
     """
     pid = tpu_data['partida_id']
 
-    # Inicializar estado interactivo en session_state si no existe
+    # Inicializar estado en session_state
     if f"sup_{pid}" not in st.session_state:
         st.session_state[f"sup_{pid}"] = float(tpu_data['sup_pct'])
     if f"hta_{pid}" not in st.session_state:
         st.session_state[f"hta_{pid}"] = float(tpu_data['hta_pct'])
     if f"hh_{pid}" not in st.session_state:
         st.session_state[f"hh_{pid}"] = float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0)
-    if f"comp_{pid}" not in st.session_state:
-        st.session_state[f"comp_{pid}"] = "campo" # campo, central, utilidad
+
+    if f"sube_driver_{pid}" not in st.session_state:
+        st.session_state[f"sube_driver_{pid}"] = "supervision" # 'supervision', 'herramienta', 'mo_hh'
+    if f"baja_driver_{pid}" not in st.session_state:
+        st.session_state[f"baja_driver_{pid}"] = "ind_campo" # 'ind_campo', 'ind_central', 'utilidad'
 
     sup_val = st.session_state[f"sup_{pid}"]
     hta_val = st.session_state[f"hta_{pid}"]
     hh_val = st.session_state[f"hh_{pid}"]
-    comp_val = st.session_state[f"comp_{pid}"]
+    sube_sel = st.session_state[f"sube_driver_{pid}"]
+    baja_sel = st.session_state[f"baja_driver_{pid}"]
 
     target_price = tpu_data['precio_unitario_target']
 
-    # Recálculos en vivo manteniendo PRECIO UNITARIO TARGET 100% FIJO
+    # Recálculos en vivo
     c_mo_u = tpu_data['costo_mo_unitario'] * hh_val
     m_hta_u = c_mo_u * (hta_val / 100.0)
     m_sup_u = c_mo_u * (sup_val / 100.0)
@@ -531,22 +528,18 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
     costo_base = tpu_data['costo_mat_unitario'] + pu_mo_fac
     dif_ind = max(0.0, target_price - costo_base)
 
-    if comp_val == "campo":
+    if baja_sel == "ind_campo":
         m_ind_campo = dif_ind
         m_ind_central = 0.0
         m_utilidad = 0.0
-    elif comp_val == "central":
+    elif baja_sel == "ind_central":
         m_ind_campo = 0.0
         m_ind_central = dif_ind
         m_utilidad = 0.0
-    elif comp_val == "utilidad":
+    else: # 'utilidad'
         m_ind_campo = 0.0
         m_ind_central = 0.0
         m_utilidad = dif_ind
-    else: # equitativo
-        m_ind_campo = dif_ind * 0.20
-        m_ind_central = dif_ind * 0.40
-        m_utilidad = dif_ind * 0.40
 
     p_ind_campo = (m_ind_campo / costo_base * 100.0) if costo_base > 0 else 0.0
     p_ind_central = (m_ind_central / costo_base * 100.0) if costo_base > 0 else 0.0
@@ -555,10 +548,11 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
     precio_final_sim = costo_base + m_ind_campo + m_ind_central + m_utilidad
     letras_sim = numero_a_letras_mxn(precio_final_sim, cot_info.get('moneda_cotizacion','MXN'))
 
-    # ── CONTENEDOR VISUAL DE LA TARJETA TPU INTERACTIVA ──
+    # ── TARJETA TPU UNIFICADA CON CONTROLES INLINE Y REGLA DE 2 CASILLAS ──
     st.markdown(f"""
     <div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:10px; padding:20px;
-                font-family:'Montserrat', sans-serif; color:#0F172A; max-width:900px; margin:0 auto; box-shadow:0 6px 18px rgba(0,0,0,0.06);">
+                font-family:'Montserrat', sans-serif; color:#0F172A; max-width:920px; margin:0 auto; box-shadow:0 6px 18px rgba(0,0,0,0.06);">
+        
         <div style="border-bottom:2px solid #FE8C29; padding-bottom:8px; margin-bottom:12px;">
             <p style="margin:0; font-size:14px; font-weight:800; color:#FE8C29;">Partida {tpu_data['numero_partida']:04d}: {tpu_data['nombre_partida']}</p>
             <p style="margin:2px 0 0 0; font-size:12px; font-weight:700; color:#334155;">
@@ -569,7 +563,7 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
     """, unsafe_allow_html=True)
 
     # 1. TABLA MATERIALES
-    st.markdown("##### 📦 Materiales")
+    st.markdown("##### 📦 Material")
     mat_data = []
     for m in tpu_data['mat_rows']:
         mat_data.append({
@@ -585,16 +579,38 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
         st.caption("Sin materiales directos asignados.")
     st.markdown(f"<p style='text-align:right; font-weight:800; margin-top:-10px;'>Total Material: <b>${tpu_data['costo_mat_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
 
-    # 2. TABLA MANO DE OBRA + BOTONES DE RENDIMIENTO INLINE
-    st.markdown("##### 👷 Mano de Obra y Rendimientos H-H")
+    # 2. SELECCIÓN DE REGLA DE CASILLAS (1 SUBIR, 1 BAJAR)
+    if not is_read_only:
+        st.markdown("<div style='background:#FFF7ED; border:1px solid #FFEDD5; border-radius:6px; padding:8px 12px; margin:10px 0;'><b>⚡ Regla de Ajuste de Casillas:</b> Selecciona 1 casilla para <b>SUBIR (🟢)</b> y 1 casilla para <b>BAJAR (🔴)</b>.</div>", unsafe_allow_html=True)
+        r_c1, r_c2 = st.columns(2)
+        with r_c1:
+            sel_sube = st.radio("🟢 Casilla seleccionada para SUBIR:", [
+                "Supervisión %",
+                "Herramienta %",
+                "Rendimiento H-H"
+            ], index=0 if sube_sel == "supervision" else (1 if sube_sel == "herramienta" else 2), key=f"rad_sube_{pid}")
+            if "Supervisión" in sel_sube: st.session_state[f"sube_driver_{pid}"] = "supervision"
+            elif "Herramienta" in sel_sube: st.session_state[f"sube_driver_{pid}"] = "herramienta"
+            else: st.session_state[f"sube_driver_{pid}"] = "mo_hh"
+
+        with r_c2:
+            sel_baja = st.radio("🔴 Casilla seleccionada para BAJAR (Absorbe la diferencia):", [
+                "Indirecto de Campo",
+                "Indirecto Central",
+                "Utilidad"
+            ], index=0 if baja_sel == "ind_campo" else (1 if baja_sel == "ind_central" else 2), key=f"rad_baja_{pid}")
+            if "Campo" in sel_baja: st.session_state[f"baja_driver_{pid}"] = "ind_campo"
+            elif "Central" in sel_baja: st.session_state[f"baja_driver_{pid}"] = "ind_central"
+            else: st.session_state[f"baja_driver_{pid}"] = "utilidad"
+
+    # 3. TABLA MANO DE OBRA Y CONTROLES INLINE
+    st.markdown("##### 👷 Mano de Obra")
     for o in tpu_data['mo_rows']:
         cm1, cm2, cm3, cm4, cm5 = st.columns([3, 1, 3, 1.5, 1.5])
-        with cm1:
-            st.markdown(f"**{o['puesto']}**")
-        with cm2:
-            st.markdown(f"Cant: **{o['cantidad']}**")
+        with cm1: st.markdown(f"**{o['puesto']}**")
+        with cm2: st.markdown(f"Cant: **{o['cantidad']}**")
         with cm3:
-            if not is_read_only:
+            if not is_read_only and sube_sel == "mo_hh":
                 b1, b2, b3 = st.columns([1, 1, 2])
                 with b1:
                     if st.button("➖", key=f"dec_hh_{pid}_{o['puesto']}"):
@@ -604,27 +620,22 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
                     if st.button("➕", key=f"inc_hh_{pid}_{o['puesto']}"):
                         st.session_state[f"hh_{pid}"] = round(st.session_state[f"hh_{pid}"] + 0.05, 2)
                         st.rerun()
-                with b3:
-                    st.caption(f"Horas: **{o['horas'] * hh_val:.3f}**")
+                with b3: st.caption(f"Horas: **{o['horas'] * hh_val:.3f}**")
             else:
                 st.markdown(f"Horas: **{o['horas'] * hh_val:.3f}**")
-        with cm4:
-            st.markdown(f"Costo HH: **${o['costo_hh']:,.2f}**")
-        with cm5:
-            st.markdown(f"Importe: **${o['importe'] * hh_val:,.2f}**")
+        with cm4: st.markdown(f"Costo HH: **${o['costo_hh']:,.2f}**")
+        with cm5: st.markdown(f"Importe: **${o['importe'] * hh_val:,.2f}**")
 
     st.markdown(f"<p style='text-align:right; font-weight:800;'>Total Mano de Obra: <b>${c_mo_u:,.2f}</b></p>", unsafe_allow_html=True)
     st.divider()
 
-    # 3. HERRAMIENTA Y SUPERVISIÓN CON BOTONES INLINE [-] [+] [☑️]
-    st.markdown("##### 🛠️ Factores Directos (Herramienta y Supervisión)")
-    
-    # Herramienta Row
+    # 4. HERRAMIENTA Y SUPERVISIÓN
     ch1, ch2, ch3, ch4 = st.columns([2, 3, 2, 2])
     with ch1:
-        st.markdown("**Herramienta**")
+        prefix = "🟢 " if sube_sel == "herramienta" else ""
+        st.markdown(f"**{prefix}Herramienta**")
     with ch2:
-        if not is_read_only:
+        if not is_read_only and sube_sel == "herramienta":
             hb1, hb2, hb3 = st.columns([1, 1, 2])
             with hb1:
                 if st.button("➖", key=f"dec_hta_{pid}"):
@@ -634,21 +645,18 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
                 if st.button("➕", key=f"inc_hta_{pid}"):
                     st.session_state[f"hta_{pid}"] = round(st.session_state[f"hta_{pid}"] + 0.5, 1)
                     st.rerun()
-            with hb3:
-                st.markdown(f"**{hta_val:.2f}%**")
+            with hb3: st.markdown(f"**{hta_val:.2f}%**")
         else:
             st.markdown(f"**{hta_val:.2f}%**")
-    with ch3:
-        st.caption("Calculado sobre MO")
-    with ch4:
-        st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_hta_u:,.2f}</p>", unsafe_allow_html=True)
+    with ch3: st.caption("Factor MO")
+    with ch4: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_hta_u:,.2f}</p>", unsafe_allow_html=True)
 
-    # Supervisión Row
     cs1, cs2, cs3, cs4 = st.columns([2, 3, 2, 2])
     with cs1:
-        st.markdown("**Supervisión**")
+        prefix = "🟢 " if sube_sel == "supervision" else ""
+        st.markdown(f"**{prefix}Supervisión**")
     with cs2:
-        if not is_read_only:
+        if not is_read_only and sube_sel == "supervision":
             sb1, sb2, sb3 = st.columns([1, 1, 2])
             with sb1:
                 if st.button("➖", key=f"dec_sup_{pid}"):
@@ -658,55 +666,44 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
                 if st.button("➕", key=f"inc_sup_{pid}"):
                     st.session_state[f"sup_{pid}"] = round(st.session_state[f"sup_{pid}"] + 1.0, 1)
                     st.rerun()
-            with sb3:
-                st.markdown(f"**{sup_val:.2f}%**")
+            with sb3: st.markdown(f"**{sup_val:.2f}%**")
         else:
             st.markdown(f"**{sup_val:.2f}%**")
-    with cs3:
-        st.caption("Calculado sobre MO")
-    with cs4:
-        st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_sup_u:,.2f}</p>", unsafe_allow_html=True)
+    with cs3: st.caption("Factor MO")
+    with cs4: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_sup_u:,.2f}</p>", unsafe_allow_html=True)
 
     st.markdown(f"<p style='text-align:right; font-weight:800; color:#0F172A; font-size:14px;'>PRECIO UNITARIO MO + FACTORES: <b>${pu_mo_fac:,.2f}</b></p>", unsafe_allow_html=True)
     st.divider()
 
-    # 4. COSTO UNITARIO BASE, INDIRECTOS Y UTILIDAD FINAL CON MARCADOR DE COMPENSACIÓN [☑️]
-    st.markdown("##### 🏢 Costo Base, Indirectos y Utilidad Final")
+    # 5. COSTO BASE, INDIRECTOS Y UTILIDAD
     st.markdown(f"<p style='font-size:14px; font-weight:800; color:#334155;'>COSTO UNITARIO BASE: <b>${costo_base:,.2f}</b></p>", unsafe_allow_html=True)
 
-    # Selectbox de Compensación [☑️]
-    if not is_read_only:
-        comp_selection = st.radio(
-            "☑️ Marca el rubro que absorbe el ajuste dinámico (Compensador Target):",
-            ["🏕️ Indirecto de Campo", "🏢 Indirecto Central", "💰 Utilidad"],
-            index=0 if comp_val == "campo" else (1 if comp_val == "central" else 2),
-            horizontal=True,
-            key=f"radio_comp_{pid}"
-        )
-        if "Campo" in comp_selection: st.session_state[f"comp_{pid}"] = "campo"
-        elif "Central" in comp_selection: st.session_state[f"comp_{pid}"] = "central"
-        else: st.session_state[f"comp_{pid}"] = "utilidad"
-
     ci1, ci2, ci3 = st.columns([3, 2, 2])
-    with ci1: st.markdown(f"Indirecto de Campo ({p_ind_campo:.2f}%)")
-    with ci2: st.caption("Compensado" if comp_val == "campo" else "Fijo")
+    with ci1:
+        tag = "🔴 (BAJA)" if baja_sel == "ind_campo" else ""
+        st.markdown(f"Indirecto de campo ({p_ind_campo:.2f}%) {tag}")
+    with ci2: st.caption("Compensador Target" if baja_sel == "ind_campo" else "Fijo")
     with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_ind_campo:,.2f}</p>", unsafe_allow_html=True)
 
     ci1, ci2, ci3 = st.columns([3, 2, 2])
-    with ci1: st.markdown(f"Indirecto Central ({p_ind_central:.2f}%)")
-    with ci2: st.caption("Compensado" if comp_val == "central" else "Fijo")
+    with ci1:
+        tag = "🔴 (BAJA)" if baja_sel == "ind_central" else ""
+        st.markdown(f"Indirecto Central ({p_ind_central:.2f}%) {tag}")
+    with ci2: st.caption("Compensador Target" if baja_sel == "ind_central" else "Fijo")
     with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_ind_central:,.2f}</p>", unsafe_allow_html=True)
 
     ci1, ci2, ci3 = st.columns([3, 2, 2])
-    with ci1: st.markdown(f"Utilidad ({p_utilidad:.2f}%)")
-    with ci2: st.caption("Compensado" if comp_val == "utilidad" else "Fijo")
+    with ci1:
+        tag = "🔴 (BAJA)" if baja_sel == "utilidad" else ""
+        st.markdown(f"Utilidad ({p_utilidad:.2f}%) {tag}")
+    with ci2: st.caption("Compensador Target" if baja_sel == "utilidad" else "Fijo")
     with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_utilidad:,.2f}</p>", unsafe_allow_html=True)
 
     # PRECIO UNITARIO FINAL - VERDE RESALTADO
     st.markdown(f"""
     <div style="background:#10B981; color:#FFFFFF; padding:12px 16px; border-radius:6px; margin-top:14px;
                 display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:15px; font-weight:900;">PRECIO UNITARIO FINAL</span>
+        <span style="font-size:15px; font-weight:900;">PRECIO UNITARIO FINAL (COINCIDENCIA 100% FIJA)</span>
         <span style="font-size:18px; font-weight:900;">${precio_final_sim:,.2f}</span>
     </div>
     <p style="text-align:right; font-size:11.5px; font-weight:700; color:#334155; font-style:italic; margin-top:6px;">
@@ -714,10 +711,9 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
     </p>
     """, unsafe_allow_html=True)
 
-    # Botón de Guardado Persistente en Base de Datos
     if not is_read_only:
         st.markdown("---")
-        if st.button("💾 GUARDAR AJUSTE TPU EN BASE DE DATOS Y RE-GENERAR PDF", type="primary", key=f"btn_save_inline_{pid}"):
+        if st.button("💾 GUARDAR AJUSTE TPU EN BASE DE DATOS Y RE-GENERAR PDF", type="primary", key=f"btn_save_unified_{pid}"):
             conn = get_connection()
             cur = conn.cursor()
             cur.execute("""
@@ -743,9 +739,9 @@ def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
 
             try:
                 from database.storage_manager import auto_sync_database_and_storage_to_github
-                auto_sync_database_and_storage_to_github("Guardar ajuste interactivo TPU partida #" + str(p_info['numero_partida']))
+                auto_sync_database_and_storage_to_github("Guardar ajuste unificado TPU partida #" + str(p_info['numero_partida']))
             except Exception:
                 pass
 
-            st.success("Ajuste guardado exitosamente en la Base de Datos y sincronizado.")
+            st.success("Ajuste unificado guardado exitosamente en la Base de Datos y sincronizado.")
             st.rerun()
