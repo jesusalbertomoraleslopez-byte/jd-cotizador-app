@@ -365,32 +365,35 @@ def render_tpu_dashboard_summary(cot_info, partidas):
         pu_f = tpu['precio_unitario_final']
         p_num = f"Partida {p.get('numero_partida',1):04d}"
 
-        m_mat = tpu['costo_mat_unitario']
-        m_maq = tpu['costo_maq_unitario']
-        m_mo = tpu['precio_unitario_mo_factor']
-        m_base = tpu['costo_unitario_base']
+        m_mat   = tpu['costo_mat_unitario']
+        m_maq   = tpu['costo_maq_unitario']
+        m_base  = tpu['costo_unitario_base']
         m_campo = tpu['monto_ind_campo']
         m_central = tpu['monto_ind_central']
-        m_util = tpu['monto_utilidad']
-        m_iva = pu_f * 1.16
+        m_util  = tpu['monto_utilidad']
+        m_iva   = pu_f * 1.16
 
-        pct_mat = (m_mat / pu_f * 100.0) if pu_f > 0 else 0.0
-        pct_maq = (m_maq / pu_f * 100.0) if pu_f > 0 else 0.0
-        pct_mo = (m_mo / pu_f * 100.0) if pu_f > 0 else 0.0
-        pct_base = (m_base / pu_f * 100.0) if pu_f > 0 else 0.0
-        pct_campo = (m_campo / pu_f * 100.0) if pu_f > 0 else 0.0
+        # MO = COSTO_BASE - Mat - Maq  → captura MO + Herramienta + Supervisión + Sub + Gastos
+        # Garantiza que Mat + Maq + MO + Ind.Campo + Ind.Central + Util = PRECIO FINAL = 100%
+        m_mo = m_base - m_mat - m_maq
+
+        pct_mat     = (m_mat     / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_maq     = (m_maq     / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_mo      = (m_mo      / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_base    = (m_base    / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_campo   = (m_campo   / pu_f * 100.0) if pu_f > 0 else 0.0
         pct_central = (m_central / pu_f * 100.0) if pu_f > 0 else 0.0
-        pct_util = (m_util / pu_f * 100.0) if pu_f > 0 else 0.0
+        pct_util    = (m_util    / pu_f * 100.0) if pu_f > 0 else 0.0
 
-        tot_mat += m_mat
-        tot_maq += m_maq
-        tot_mo += m_mo
-        tot_base += m_base
-        tot_campo += m_campo
+        tot_mat     += m_mat
+        tot_maq     += m_maq
+        tot_mo      += m_mo
+        tot_base    += m_base
+        tot_campo   += m_campo
         tot_central += m_central
-        tot_util += m_util
-        tot_final += pu_f
-        tot_iva += m_iva
+        tot_util    += m_util
+        tot_final   += pu_f
+        tot_iva     += m_iva
 
         rows_html += f'<tr style="border-bottom:1px solid #E2E8F0; text-align:center; font-size:11px;"><td style="padding:6px 8px; text-align:left; font-weight:700; background:#F8FAFC;">{p_num}</td><td style="padding:6px 8px;">${m_mat:,.2f} ({pct_mat:.1f}%)</td><td style="padding:6px 8px;">${m_maq:,.2f} ({pct_maq:.1f}%)</td><td style="padding:6px 8px;">${m_mo:,.2f} ({pct_mo:.1f}%)</td><td style="padding:6px 8px; font-weight:700; background:#FFFBEB;">${m_base:,.2f} ({pct_base:.1f}%)</td><td style="padding:6px 8px;">${m_campo:,.2f} ({pct_campo:.1f}%)</td><td style="padding:6px 8px;">${m_central:,.2f} ({pct_central:.1f}%)</td><td style="padding:6px 8px;">${m_util:,.2f} ({pct_util:.1f}%)</td><td style="padding:6px 8px; font-weight:800; color:#047857; background:#ECFDF5;">${pu_f:,.2f} (100%)</td><td style="padding:6px 8px; font-weight:700; color:#1E293B;">${m_iva:,.2f}</td></tr>'
 
@@ -404,7 +407,7 @@ def render_tpu_dashboard_summary(cot_info, partidas):
 
     total_row_html = f'<tr style="background:#FDE68A; color:#0F172A; text-align:center; font-weight:900; font-size:11.5px; border-top:2px solid #D97706;"><td style="padding:8px; text-align:left;">TOTAL GENERAL</td><td style="padding:8px;">${tot_mat:,.2f} ({tot_pct_mat:.1f}%)</td><td style="padding:8px;">${tot_maq:,.2f} ({tot_pct_maq:.1f}%)</td><td style="padding:8px;">${tot_mo:,.2f} ({tot_pct_mo:.1f}%)</td><td style="padding:8px;">${tot_base:,.2f} ({tot_pct_base:.1f}%)</td><td style="padding:8px;">${tot_campo:,.2f} ({tot_pct_campo:.1f}%)</td><td style="padding:8px;">${tot_central:,.2f} ({tot_pct_central:.1f}%)</td><td style="padding:8px;">${tot_util:,.2f} ({tot_pct_util:.1f}%)</td><td style="padding:8px; color:#065F46; background:#A7F3D0;">${tot_final:,.2f} (100%)</td><td style="padding:8px; color:#0F172A;">${tot_iva:,.2f}</td></tr>'
 
-    dash_table_html = f'<div style="overflow-x:auto; margin-bottom:16px;"><table style="width:100%; border-collapse:collapse; border:1px solid #CBD5E1; font-family:\'Montserrat\', sans-serif;"><thead><tr style="background:#FDE68A; color:#0F172A; text-align:center; font-weight:800; font-size:11.5px; border-bottom:2px solid #D97706;"><th style="padding:8px; border:1px solid #CBD5E1;">Partida</th><th style="padding:8px; border:1px solid #CBD5E1;">Materiales Directos</th><th style="padding:8px; border:1px solid #CBD5E1;">Maquinaria y Equipo</th><th style="padding:8px; border:1px solid #CBD5E1;">Mano de Obra</th><th style="padding:8px; border:1px solid #CBD5E1;">COSTO UNITARIO BASE</th><th style="padding:8px; border:1px solid #CBD5E1;">Indirecto de campo</th><th style="padding:8px; border:1px solid #CBD5E1;">Indirecto Central</th><th style="padding:8px; border:1px solid #CBD5E1;">Utilidad</th><th style="padding:8px; border:1px solid #CBD5E1;">PRECIO UNITARIO FINAL</th><th style="padding:8px; border:1px solid #CBD5E1;">Total con IVA</th></tr></thead><tbody>{rows_html}{total_row_html}</tbody></table></div>'
+    dash_table_html = f'<div style="overflow-x:auto; margin-bottom:16px;"><table style="width:100%; border-collapse:collapse; border:1px solid #CBD5E1; font-family:\'Montserrat\', sans-serif;"><thead><tr style="background:#1E293B; color:#FFFFFF; text-align:center; font-weight:800; font-size:10.5px; border-bottom:2px solid #D97706;"><th style="padding:8px; border:1px solid #475569;">Partida</th><th style="padding:8px; border:1px solid #475569;">Materiales Directos</th><th style="padding:8px; border:1px solid #475569;">Maquinaria y Equipo</th><th style="padding:8px; border:1px solid #475569;">MO + Factores</th><th style="padding:8px; border:1px solid #475569;">COSTO UNITARIO BASE</th><th style="padding:8px; border:1px solid #475569;">Indirecto de Campo</th><th style="padding:8px; border:1px solid #475569;">Indirecto Central</th><th style="padding:8px; border:1px solid #475569;">Utilidad</th><th style="padding:8px; border:1px solid #475569; background:#065F46;">PRECIO UNITARIO FINAL</th><th style="padding:8px; border:1px solid #475569;">Total con IVA</th></tr></thead><tbody>{rows_html}{total_row_html}</tbody></table></div>'
 
     st.markdown(dash_table_html, unsafe_allow_html=True)
 
