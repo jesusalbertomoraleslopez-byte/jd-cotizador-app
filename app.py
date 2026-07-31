@@ -164,8 +164,9 @@ elif "Plan de Proyecto" in menu_option:
 elif "Cierre" in menu_option:
     render_header("Módulo de Cierre y Entrega de Cotización",
                   "Previsualización, supervisión y descarga en 1 clic del paquete completo de entregables (PDF, Excel y Correo .EML)")
-    from modules.cierre_entrega import render_cierre_entrega
-    render_cierre_entrega()
+    import importlib, modules.cierre_entrega
+    importlib.reload(modules.cierre_entrega)
+    modules.cierre_entrega.render_cierre_entrega()
 
 elif "TPU" in menu_option:
     render_header("Tarjetas de Precios Unitarios (TPU)",
