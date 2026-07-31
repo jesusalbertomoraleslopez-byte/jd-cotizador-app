@@ -708,7 +708,7 @@ def _generate_presupuesto_excel(cot_info, partidas):
 # 4. GENERADOR DE CORREO NOTIFICACIÓN (.EML) MULTIPART/MIXED
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
+def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None, custom_to=None, custom_cc=None):
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     from email.mime.application import MIMEApplication
@@ -717,6 +717,7 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
     import os
     
     msg = MIMEMultipart('mixed')
+    msg['X-Unsent'] = '1'
     folio = cot_info.get('folio', 'COT-2026-001-JAI-DS')
     proyecto = cot_info.get('proyecto', 'AUTOMATIZACIÓN DE LÍNEA DE PROCESO')
     cliente = cot_info.get('cliente', 'YESERA MONTERREY')
@@ -774,13 +775,19 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
     msg['Subject'] = f"Propuesta Técnica y Comercial: {proyecto} | Ref: {folio_corto}"
     msg['From'] = "Ing. David Alaniz <ventas@jdautomation.mx>"
     
-    client_email = cot_info.get('email_contacto') or cot_info.get('email_cliente') or cot_info.get('email') or cot_info.get('correo')
-    if client_email and str(client_email).strip():
-        msg['To'] = f"{contacto} <{str(client_email).strip()}>"
+    if custom_to and str(custom_to).strip():
+        msg['To'] = str(custom_to).strip()
     else:
-        msg['To'] = f"{contacto} <contacto.cliente@empresa.com>"
+        client_email = cot_info.get('email_contacto') or cot_info.get('email_cliente') or cot_info.get('email') or cot_info.get('correo')
+        if client_email and str(client_email).strip():
+            msg['To'] = f"{contacto} <{str(client_email).strip()}>"
+        else:
+            msg['To'] = f"{contacto} <contacto.cliente@empresa.com>"
 
-    msg['Cc'] = "alberto.morales@jydautomation.com.mx, david.alaniz@jydautomation.com.mx, ventas@jydautomation.com.mx"
+    if custom_cc and str(custom_cc).strip():
+        msg['Cc'] = str(custom_cc).strip()
+    else:
+        msg['Cc'] = "alberto.morales@jydautomation.com.mx, david.alaniz@jydautomation.com.mx, ventas@jydautomation.com.mx"
 
     logo_img_tag = f'<div style="background:#FFFFFF; padding:8px 16px; border-radius:8px; display:inline-block; margin-bottom:12px;"><img src="data:image/png;base64,{logo_b64}" width="{logo_w}" height="{logo_h}" style="width:{logo_w}px; height:{logo_h}px; display:block; border:0;" alt="J&amp;D Automation"></div>' if logo_b64 else ''
 
@@ -1033,10 +1040,24 @@ def render_cierre_entrega():
 
     st.divider()
 
-    # Generar los 3 entregables en memoria
+    # ── CONFIGURACIÓN DE DESTINATARIOS PARA EL CORREO .EML ──
+    with st.expander("✉️ Personalizar Destinatario (Para) y Copia (Cc) del Correo (.EML)", expanded=False):
+        st.markdown("<p style='font-size:12px;color:#475569;'>Puedes personalizar la dirección del cliente y las copias antes de descargar el borrador de correo (.EML) editable.</p>", unsafe_allow_html=True)
+        col_eml1, col_eml2 = st.columns([1, 1])
+        
+        default_client_email = cot_info.get('email_contacto') or cot_info.get('email_cliente') or cot_info.get('email') or cot_info.get('correo') or 'contacto.cliente@empresa.com'
+        contacto_name = cot_info.get('nombre_contacto') or 'Ing. Ricardo Gallegos'
+        default_to_str = f"{contacto_name} <{default_client_email}>" if '<' not in str(default_client_email) else default_client_email
+        
+        with col_eml1:
+            eml_to_custom = st.text_input("📩 Destinatario Principal (Para / To)", value=default_to_str, key="eml_to_input")
+        with col_eml2:
+            eml_cc_custom = st.text_input("📋 Correos en Copia (Cc)", value="alberto.morales@jydautomation.com.mx, david.alaniz@jydautomation.com.mx, ventas@jydautomation.com.mx", key="eml_cc_input")
+
+    # Generar los entregables en memoria
     pdf_bytes = _generate_cotizacion_pdf_oficial(cot_info, partidas, respuestas_tecnicas)
     excel_bytes = _generate_presupuesto_excel(cot_info, partidas)
-    eml_bytes = _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=partidas)
+    eml_bytes = _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=partidas, custom_to=eml_to_custom, custom_cc=eml_cc_custom)
     zip_bytes = _generate_zip_paquete(cot_info, pdf_bytes, excel_bytes, eml_bytes)
 
     # Sanitizar el folio para garantizar nombres de archivo HTTP 100% seguros sin acentos ni paréntesis
