@@ -40,13 +40,12 @@ def render_mantenimiento_page():
         </div>
         """, unsafe_allow_html=True)
 
-    m_tab1, m_tab2, m_tab3, m_tab4, m_tab5, m_tab6 = st.tabs([
+    m_tab1, m_tab2, m_tab3, m_tab4, m_tab5 = st.tabs([
         "🔒 Control DB & Borrado Masivo",
         "🏢 Clientes",
         "📦 Catálogos Base",
         "✏️ Modificador de Cotizaciones",
-        "🗄️ Explorador Deploy",
-        "📁 Resguardo Carpetas & Borrado GitHub"
+        "🗄️ Explorador Deploy & GitHub"
     ])
 
     # ── TAB 1: GESTIÓN DE BASE DE DATOS & BORRADO ──
@@ -270,41 +269,12 @@ def render_mantenimiento_page():
                 st.success(f"Se han removido {count_del} archivos temporales y caches de servidor.")
 
         st.markdown("---")
-        # Exportación Universal PDF Mantenimiento
-        sec_mant_pdf = [
-            {'title': 'Estado General de Base de Datos', 'content': f'Base de datos: {db_path}\nTamaño en disco: {db_size_mb:.2f} MB\nEstado Integridad: OK'},
-            {'title': 'Resumen de Seguridad y Accesos', 'content': 'Perfil Activo: Administrador\nAcceso a Acciones Críticas: Habilitado'}
-        ]
-        pdf_mant_bytes = generar_pdf_modulo("Reporte de Mantenimiento y Almacenamiento", "Auditoría de Servidor y Deploy J&D Automation", sec_mant_pdf)
-        st.download_button(
-            label="📄 EXPORTAR REPORTE DE MANTENIMIENTO EN PDF",
-            data=pdf_mant_bytes,
-            file_name="Reporte_Mantenimiento_Almacenamiento_JD.pdf",
-            mime="application/pdf",
-            type="primary",
-            use_container_width=True,
-            key="btn_dl_pdf_mantenimiento"
-        )
-
-    # ── TAB 6: RESGUARDO DE CARPETAS & BORRADO GITHUB ──
-    with m_tab6:
-        st.markdown(f"""
-        <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};border-left:5px solid {BRAND_ORANGE};
-                    border-radius:8px;padding:16px 20px;margin-bottom:20px;font-family:'Montserrat',sans-serif;">
-            <p style="font-size:13px;font-weight:700;color:{BRAND_CHARCOAL};margin:0 0 4px 0;">
-                📁 REGISTRO PERSISTENTE DE CARPETAS DE COTIZACIÓN Y SINCRONIZACIÓN GITHUB
-            </p>
-            <p style="font-size:11px;color:{BRAND_CHARCOAL_MED};margin:0;">
-                Cada cotización generada guarda sus 5 entregables (PDF, Excel, .EML, .ZIP y metadata JSON) en la carpeta resguardada `cotizaciones_guardadas/{{folio}}/`. 
-                Aunque se reinicie la app o se borre la BD SQLite, esta información se mantiene intacta.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"### 📁 CARPETAS Y ARCHIVOS EN REPOSITORIO GITHUB & SERVIDOR")
 
         from database.storage_manager import list_saved_cotizaciones, delete_saved_cotizacion_folder, delete_from_github_api, fetch_github_quote_folders
         saved_cots = list_saved_cotizaciones()
 
-        st.markdown(f"### 🖥️ 1. Carpetas y Archivos en Servidor Local / Deploy")
+        st.markdown(f"#### 🖥️ 1. Carpetas y Archivos en Servidor Local / Deploy (`cotizaciones_guardadas/`)")
 
         if not saved_cots:
             st.info("No hay carpetas de cotización resguardadas en `cotizaciones_guardadas/` actualmente.")
@@ -329,7 +299,6 @@ def render_mantenimiento_page():
                 opt_folders = [s['folio_folder'] for s in saved_cots]
                 sel_folder = st.selectbox("Seleccionar Carpeta de Cotización para Gestionar", opt_folders, key="sel_folder_resguardo")
                 
-                # Mostrar contenido de la carpeta seleccionada
                 target_rec = next((r for r in saved_cots if r['folio_folder'] == sel_folder), None)
                 if target_rec:
                     st.markdown(f"**Archivos en `cotizaciones_guardadas/{sel_folder}/`:**")
@@ -367,7 +336,7 @@ def render_mantenimiento_page():
                                 st.error(f"Error al eliminar en GitHub: {res_gh['message']}")
 
         st.markdown("---")
-        st.markdown("### 🌐 2. Explorador en Tiempo Real de Carpetas y Archivos en Repositorio GITHUB")
+        st.markdown("#### 🌐 2. Explorador en Tiempo Real de Carpetas y Archivos en Repositorio GITHUB")
         st.markdown("`https://github.com/jesusalbertomoraleslopez-byte/jd-cotizador-app/tree/main/cotizaciones_guardadas`")
 
         if st.button("🔄 Consultar / Refrescar Archivos en GitHub API", type="primary", key="btn_refresh_gh_api"):
@@ -392,6 +361,23 @@ def render_mantenimiento_page():
                                 c_f2.markdown(f"[⬇️ Descargar Directo de GitHub]({gfile['download_url']})")
         else:
             st.warning(f"No se pudo consultar el API de GitHub directamente: {gh_res.get('message')}")
+
+        st.markdown("---")
+        # Exportación Universal PDF Mantenimiento
+        sec_mant_pdf = [
+            {'title': 'Estado General de Base de Datos', 'content': f'Base de datos: {db_path}\nTamaño en disco: {db_size_mb:.2f} MB\nEstado Integridad: OK'},
+            {'title': 'Resumen de Seguridad y Accesos', 'content': 'Perfil Activo: Administrador\nAcceso a Acciones Críticas: Habilitado'}
+        ]
+        pdf_mant_bytes = generar_pdf_modulo("Reporte de Mantenimiento y Almacenamiento", "Auditoría de Servidor y Deploy J&D Automation", sec_mant_pdf)
+        st.download_button(
+            label="📄 EXPORTAR REPORTE DE MANTENIMIENTO EN PDF",
+            data=pdf_mant_bytes,
+            file_name="Reporte_Mantenimiento_Almacenamiento_JD.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+            key="btn_dl_pdf_mantenimiento"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
