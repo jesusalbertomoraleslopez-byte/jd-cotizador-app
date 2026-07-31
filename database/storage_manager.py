@@ -218,3 +218,47 @@ def delete_from_github_api(folio_folder, token=None):
         "message": f"Se eliminó la carpeta '{folio_folder}' del sistema de archivos.",
         "method": "Local Filesystem Clean"
     }
+
+
+def fetch_github_quote_folders(token=None):
+    """
+    Consulta la API REST de GitHub para obtener en tiempo real todas las carpetas y archivos resguardados en GitHub.
+    """
+    url = f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/contents/cotizaciones_guardadas"
+    headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "JD-Cotizador-App"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+    
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            items = res.json()
+            folders = []
+            for it in items:
+                if it.get("type") == "dir":
+                    sub_url = it.get("url")
+                    sub_res = requests.get(sub_url, headers=headers, timeout=10)
+                    sub_files = []
+                    if sub_res.status_code == 200:
+                        for s_it in sub_res.json():
+                            sub_files.append({
+                                "name": s_it.get("name"),
+                                "size_kb": f"{s_it.get('size', 0)/1024.0:.1f} KB",
+                                "download_url": s_it.get("download_url"),
+                                "html_url": s_it.get("html_url"),
+                                "path": s_it.get("path"),
+                                "sha": s_it.get("sha")
+                            })
+                    folders.append({
+                        "folder_name": it.get("name"),
+                        "path": it.get("path"),
+                        "html_url": it.get("html_url"),
+                        "files": sub_files
+                    })
+            return {"success": True, "folders": folders}
+        elif res.status_code == 404:
+            return {"success": True, "folders": [], "message": "La carpeta 'cotizaciones_guardadas' aún no se ha subido a GitHub."}
+        else:
+            return {"success": False, "message": f"Respuesta de GitHub HTTP {res.status_code}: {res.text}"}
+    except Exception as e:
+        return {"success": False, "message": f"Error conectando con la API de GitHub: {str(e)}"}

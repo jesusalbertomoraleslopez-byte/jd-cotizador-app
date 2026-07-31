@@ -301,8 +301,10 @@ def render_mantenimiento_page():
         </div>
         """, unsafe_allow_html=True)
 
-        from database.storage_manager import list_saved_cotizaciones, delete_saved_cotizacion_folder, delete_from_github_api
+        from database.storage_manager import list_saved_cotizaciones, delete_saved_cotizacion_folder, delete_from_github_api, fetch_github_quote_folders
         saved_cots = list_saved_cotizaciones()
+
+        st.markdown(f"### 🖥️ 1. Carpetas y Archivos en Servidor Local / Deploy")
 
         if not saved_cots:
             st.info("No hay carpetas de cotización resguardadas en `cotizaciones_guardadas/` actualmente.")
@@ -322,8 +324,6 @@ def render_mantenimiento_page():
                 hide_index=True
             )
 
-            st.markdown("---")
-
             col_sel_f, col_act_f = st.columns([2, 1.5])
             with col_sel_f:
                 opt_folders = [s['folio_folder'] for s in saved_cots]
@@ -341,7 +341,7 @@ def render_mantenimiento_page():
             with col_act_f:
                 st.markdown(f"<p style='font-size:12px;font-weight:800;color:#DC2626;'>🗑️ ACCIONES DE ELIMINACIÓN Y BORRADO REMOTO</p>", unsafe_allow_html=True)
                 
-                gh_token_input = st.text_input("GitHub Token (PAT Opcional)", value=os.environ.get("GITHUB_TOKEN", ""), type="password", help="Ingresa tu Personal Access Token de GitHub si deseas forzar el borrado en el repositorio remoto", key="gh_token_input")
+                gh_token_input = st.text_input("GitHub Token (PAT Opcional)", value=os.environ.get("GITHUB_TOKEN", ""), type="password", help="Ingresa tu Personal Access Token de GitHub si deseas forzar el borrado o lectura restringida", key="gh_token_input")
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button(f"🗑️ Eliminar '{sel_folder}' Localmente", use_container_width=True, key="btn_del_local_folder"):
@@ -365,6 +365,33 @@ def render_mantenimiento_page():
                                 st.rerun()
                             else:
                                 st.error(f"Error al eliminar en GitHub: {res_gh['message']}")
+
+        st.markdown("---")
+        st.markdown("### 🌐 2. Explorador en Tiempo Real de Carpetas y Archivos en Repositorio GITHUB")
+        st.markdown("`https://github.com/jesusalbertomoraleslopez-byte/jd-cotizador-app/tree/main/cotizaciones_guardadas`")
+
+        if st.button("🔄 Consultar / Refrescar Archivos en GitHub API", type="primary", key="btn_refresh_gh_api"):
+            st.session_state['gh_fetch_run'] = True
+
+        gh_res = fetch_github_quote_folders(token=gh_token_input.strip() if 'gh_token_input' in locals() and gh_token_input else None)
+
+        if gh_res.get("success"):
+            gh_folders = gh_res.get("folders", [])
+            if not gh_folders:
+                st.info("ℹ️ " + gh_res.get("message", "No se encontraron carpetas remotas en 'cotizaciones_guardadas' en GitHub."))
+            else:
+                st.success(f"✅ Se encontraron **{len(gh_folders)} carpeta(s)** registradas remotamente en GitHub:")
+                for gf in gh_folders:
+                    with st.expander(f"📁 GitHub: {gf['folder_name']} ({len(gf['files'])} archivos)", expanded=True):
+                        st.markdown(f"**Ruta Remota:** `{gf['path']}` | [🔗 Ver en GitHub.com]({gf['html_url']})")
+                        st.markdown("**Archivos Contenidos:**")
+                        for gfile in gf['files']:
+                            c_f1, c_f2 = st.columns([3, 1])
+                            c_f1.markdown(f"• 📄 **`{gfile['name']}`** ({gfile['size_kb']})")
+                            if gfile.get("download_url"):
+                                c_f2.markdown(f"[⬇️ Descargar Directo de GitHub]({gfile['download_url']})")
+        else:
+            st.warning(f"No se pudo consultar el API de GitHub directamente: {gh_res.get('message')}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
