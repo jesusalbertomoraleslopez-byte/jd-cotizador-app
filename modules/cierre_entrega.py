@@ -718,6 +718,7 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None, custom
     
     msg = MIMEMultipart('mixed')
     msg['X-Unsent'] = '1'
+    msg['X-MS-Has-Attach'] = 'yes'
     folio = cot_info.get('folio', 'COT-2026-001-JAI-DS')
     proyecto = cot_info.get('proyecto', 'AUTOMATIZACIÓN DE LÍNEA DE PROCESO')
     cliente = cot_info.get('cliente', 'YESERA MONTERREY')
