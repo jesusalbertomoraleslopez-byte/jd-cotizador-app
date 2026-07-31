@@ -114,7 +114,10 @@ with st.sidebar:
 def render_header(title, subtitle=""):
     banner_path = os.path.join(ASSETS_DIR, "banner_corporativo.png")
     if os.path.exists(banner_path):
-        st.image(banner_path, use_container_width=True)
+        try:
+            st.image(banner_path, use_container_width=True)
+        except Exception:
+            st.image(banner_path, use_column_width=True)
         st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
     logo_path = LOGO_CORP if os.path.exists(LOGO_CORP) else None
