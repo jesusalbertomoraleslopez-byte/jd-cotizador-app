@@ -165,37 +165,36 @@ elif "TPU" in menu_option:
     render_tpu_generator()
 
 elif "Mantenimiento" in menu_option:
-    render_header("Módulo de Mantenimiento y Administración General",
-                  "Centro unificado para la gestión de base de datos, clientes, catálogos base y modificación de cotizaciones")
-    from modules.mantenimiento_sgc import render_mantenimiento_page
-    render_mantenimiento_page()
-
+    render_header("Área de Mantenimiento y Almacenamiento",
+                  "Herramientas avanzadas de edición, corrección de datos y monitoreo de servidor")
+    import importlib, modules.mantenimiento_sgc
+    importlib.reload(modules.mantenimiento_sgc)
+    modules.mantenimiento_sgc.render_mantenimiento_page()
 
 elif "SGC" in menu_option:
     render_header("Sistema de Gestión de Calidad (SGC)",
                   "Procedimientos institucionales normados y carga de documentación ISO 9001:2015")
-    from modules.mantenimiento_sgc import render_sgc_page
-    render_sgc_page()
+    import importlib, modules.mantenimiento_sgc
+    importlib.reload(modules.mantenimiento_sgc)
+    modules.mantenimiento_sgc.render_sgc_page()
 
 elif "Glosario" in menu_option:
     render_header("Glosario y Auditoría Master de Documentación",
                   "Tabla maestra auditable de formatos generados e intercambiados por el sistema con descargas de muestras")
-    from modules.mantenimiento_sgc import render_glosario_page
-    render_glosario_page()
+    import importlib, modules.mantenimiento_sgc
+    importlib.reload(modules.mantenimiento_sgc)
+    modules.mantenimiento_sgc.render_glosario_page()
 
 elif "Industria" in menu_option:
     render_header("Manufactura Inteligente e Industria 4.0",
                   "Justificación tecnológica, beneficios estratégicos comerciales y resumen del stack")
-    from modules.mantenimiento_sgc import render_industria40_page
-    render_industria40_page()
+    import importlib, modules.mantenimiento_sgc
+    importlib.reload(modules.mantenimiento_sgc)
+    modules.mantenimiento_sgc.render_industria40_page()
 
 elif "Manual" in menu_option:
     render_header("Manual de Operación e Instrucción de Uso",
                   "Guía de usuario interactiva paso a paso para la captura y operación del sistema")
-    from modules.mantenimiento_sgc import render_manual_page
-    render_manual_page()
-
-
-
-
-
+    import importlib, modules.mantenimiento_sgc
+    importlib.reload(modules.mantenimiento_sgc)
+    modules.mantenimiento_sgc.render_manual_page()
