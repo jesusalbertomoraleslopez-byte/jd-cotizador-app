@@ -280,21 +280,24 @@ CUSTOM_CSS = f"""
     [data-testid="stWidgetLabel"] label,
     label[data-testid="stWidgetLabel"],
     .stWidget label,
-    .stWidget label p {{
+    .stWidget label p {
         color: #1E293B !important;
         font-weight: 700 !important;
         font-size: 13px !important;
-    }}
+    }
 
-    /* Inputs, Number Inputs, Text Areas y Selectboxes */
-    div[data-baseweb="input"] > div,
+    /* Inputs, Number Inputs, Text Areas y Selectboxes - FORZAR FONDO BLANCO Y TEXTO NEGRO GRUESO */
+    div[data-baseweb="input"],
+    div[data-baseweb="select"],
     div[data-baseweb="select"] > div,
     div[data-baseweb="base-input"],
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input,
-    [data-testid="stTextArea"] textarea,
+    div[data-testid="stNumberInputContainer"],
+    div[data-testid="stNumberInput"] input,
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextArea"] textarea,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"],
     textarea,
-    input {{
+    input {
         background-color: #FFFFFF !important;
         color: #0F172A !important;
         -webkit-text-fill-color: #0F172A !important;
@@ -302,18 +305,18 @@ CUSTOM_CSS = f"""
         font-size: 13.5px !important;
         border: 1.5px solid #94A3B8 !important;
         border-radius: 6px !important;
-    }}
+    }
 
     /* Texto seleccionado y spans dentro de Selectbox e Inputs */
     div[data-baseweb="select"] span,
     div[data-baseweb="select"] div,
     div[data-baseweb="select"] input,
     div[data-baseweb="input"] input,
-    div[data-baseweb="base-input"] input {{
+    div[data-baseweb="base-input"] input {
         color: #0F172A !important;
         -webkit-text-fill-color: #0F172A !important;
         font-weight: 700 !important;
-    }}
+    }
 
     /* Menú desplegable de opciones en Selectbox (Pop-over) */
     ul[data-baseweb="menu"],

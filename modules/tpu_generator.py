@@ -243,11 +243,7 @@ def render_tpu_card_html(tpu_data):
         </tr>
         """
 
-    return f"""
-    <div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:10px; padding:24px;
-                font-family:'Montserrat', sans-serif; color:#0F172A; max-width:850px; margin:0 auto; box-shadow:0 6px 18px rgba(0,0,0,0.06);">
-        
-        <!-- ENCABEZADO DE TARJETA TPU -->
+    return f"""<div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:10px; padding:24px; font-family:'Montserrat', sans-serif; color:#0F172A; max-width:850px; margin:0 auto; box-shadow:0 6px 18px rgba(0,0,0,0.06);">
         <div style="border-bottom:2px solid #FE8C29; padding-bottom:12px; margin-bottom:16px;">
             <p style="margin:0; font-size:14px; font-weight:800; color:#FE8C29;">Partida {tpu_data['numero_partida']:04d}: {tpu_data['nombre_partida']}</p>
             <p style="margin:4px 0 0 0; font-size:12.5px; font-weight:700; color:#334155;">
@@ -255,7 +251,6 @@ def render_tpu_card_html(tpu_data):
             </p>
         </div>
 
-        <!-- SECCIÓN 1: MATERIAL -->
         <div style="margin-bottom:16px;">
             <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
                 <thead>
@@ -277,7 +272,6 @@ def render_tpu_card_html(tpu_data):
             </table>
         </div>
 
-        <!-- SECCIÓN 2: MANO DE OBRA + FACTORES HERRAMIENTA Y SUPERVISIÓN -->
         <div style="margin-bottom:16px;">
             <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
                 <thead>
@@ -298,7 +292,6 @@ def render_tpu_card_html(tpu_data):
                 </tbody>
             </table>
             
-            <!-- FACTORES DE HERRAMIENTA Y SUPERVISIÓN DE MANO DE OBRA -->
             <table style="float:right; width:340px; border-collapse:collapse; font-size:12.5px; margin-top:8px;">
                 <tr>
                     <td style="padding:3px 8px; font-weight:600;">Herramienta {tpu_data['hta_pct']:.2f}%</td>
@@ -316,7 +309,6 @@ def render_tpu_card_html(tpu_data):
             <div style="clear:both;"></div>
         </div>
 
-        <!-- SECCIÓN 3: COSTO BASE, INDIRECTOS Y UTILIDAD FINAL -->
         <div style="margin-top:16px; border-top:2px solid #E2E8F0; padding-top:12px;">
             <table style="float:right; width:420px; border-collapse:collapse; font-size:13px;">
                 <tr>
@@ -345,9 +337,7 @@ def render_tpu_card_html(tpu_data):
                 {tpu_data['monto_letras']}
             </p>
         </div>
-
-    </div>
-    """
+    </div>"""
 
 
 def generate_tpu_pdf_oficial(cot_info, partidas):
