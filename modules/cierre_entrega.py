@@ -773,7 +773,6 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None, custom
             pass
 
     msg['Subject'] = f"Propuesta Técnica y Comercial: {proyecto} | Ref: {folio_corto}"
-    msg['From'] = "Ing. David Alaniz <ventas@jdautomation.mx>"
     
     if custom_to and str(custom_to).strip():
         msg['To'] = str(custom_to).strip()
