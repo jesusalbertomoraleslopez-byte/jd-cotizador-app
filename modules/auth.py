@@ -37,67 +37,57 @@ def init_auth_state():
 
 def render_login_screen():
     """
-    Despliega la pantalla completa corporativa de inicio de sesión antes de dar acceso a la app.
+    Despliega la pantalla centrada de inicio de sesión antes de dar acceso a la app.
     """
     init_auth_state()
 
-    # Ocultar la barra lateral mientras se muestra el portal de inicio de sesión
-    st.markdown("""
-    <style>
-        section[data-testid="stSidebar"] {
-            display: none !important;
-        }
-        .block-container, [data-testid="stMainBlockContainer"] {
-            max-width: 540px !important;
-            padding-top: 3rem !important;
-            margin: 0 auto !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     logo_path = os.path.join(base_dir, "assets", "logo_naranja.png")
 
-    st.markdown(f"""
-    <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-top:6px solid #FE8C29;
-                border-radius:12px; padding:28px 24px 16px 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-                text-align:center; font-family:'Montserrat', sans-serif;">
-    """, unsafe_allow_html=True)
+    # Centrar la tarjeta de inicio de sesión usando columnas de Streamlit
+    col_left, col_center, col_right = st.columns([1, 2.2, 1])
 
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=220)
-    else:
-        st.markdown("<h2 style='color:#FE8C29; margin:0;'>⚡ J&D AUTOMATION INDUSTRIES</h2>", unsafe_allow_html=True)
+    with col_center:
+        st.markdown(f"""
+        <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-top:6px solid #FE8C29;
+                    border-radius:12px; padding:28px 24px 16px 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+                    text-align:center; font-family:'Montserrat', sans-serif; margin-top: 2rem;">
+        """, unsafe_allow_html=True)
 
-    st.markdown("""
-        <h3 style="color:#434E62; font-size:17px; font-weight:800; margin:14px 0 4px 0;">SISTEMA DE COTIZACIONES &amp; PRECIOS UNITARIOS</h3>
-        <p style="color:#8C96A6; font-size:11.5px; font-weight:600; margin:0 0 16px 0;">Acceso Restringido — Ingrese sus credenciales de usuario</p>
-    </div>
-    """, unsafe_allow_html=True)
+        if os.path.exists(logo_path):
+            st.image(logo_path, width=220)
+        else:
+            st.markdown("<h2 style='color:#FE8C29; margin:0;'>⚡ J&D AUTOMATION INDUSTRIES</h2>", unsafe_allow_html=True)
 
-    with st.form("login_portal_form"):
-        u_in = st.text_input("👤 Usuario", "", placeholder="Ingresa tu usuario")
-        p_in = st.text_input("🔑 Contraseña", "", type="password", placeholder="••••••••")
-        
-        submitted = st.form_submit_button("🔐 INICIAR SESIÓN", type="primary", use_container_width=True)
-        if submitted:
-            u_clean = u_in.strip().lower()
-            if u_clean in USERS_DB and USERS_DB[u_clean]["password"] == p_in.strip():
-                st.session_state['authenticated'] = True
-                st.session_state['user_id'] = u_clean
-                st.session_state['user_name'] = USERS_DB[u_clean]["name"]
-                st.session_state['user_role'] = USERS_DB[u_clean]["role"]
-                st.session_state['user_role_label'] = USERS_DB[u_clean]["role_label"]
-                st.success(f"¡Bienvenido {USERS_DB[u_clean]['name']}!")
-                st.rerun()
-            else:
-                st.error("❌ Usuario o contraseña incorrectos. Verifique sus datos.")
+        st.markdown("""
+            <h3 style="color:#434E62; font-size:17px; font-weight:800; margin:14px 0 4px 0;">SISTEMA DE COTIZACIONES &amp; PRECIOS UNITARIOS</h3>
+            <p style="color:#8C96A6; font-size:11.5px; font-weight:600; margin:0 0 16px 0;">Acceso Restringido — Ingrese sus credenciales de usuario</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <p style="text-align:center; font-size:10px; color:#94A3B8; margin-top:20px; font-family:'Montserrat',sans-serif;">
-        J&D Automation Industries S.A. de C.V. &bull; Torreón, Coahuila, México.
-    </p>
-    """, unsafe_allow_html=True)
+        with st.form("login_portal_form", clear_on_submit=False):
+            u_in = st.text_input("👤 Usuario", value="", placeholder="Ingresa tu usuario (ej. admin u operador)")
+            p_in = st.text_input("🔑 Contraseña", value="", type="password", placeholder="••••••••")
+            
+            submitted = st.form_submit_button("🔐 INICIAR SESIÓN", type="primary", use_container_width=True)
+            if submitted:
+                u_clean = u_in.strip().lower()
+                p_clean = p_in.strip()
+                if u_clean in USERS_DB and USERS_DB[u_clean]["password"] == p_clean:
+                    st.session_state['authenticated'] = True
+                    st.session_state['user_id'] = u_clean
+                    st.session_state['user_name'] = USERS_DB[u_clean]["name"]
+                    st.session_state['user_role'] = USERS_DB[u_clean]["role"]
+                    st.session_state['user_role_label'] = USERS_DB[u_clean]["role_label"]
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña incorrectos. Verifique sus datos.")
+
+        st.markdown("""
+        <p style="text-align:center; font-size:10px; color:#94A3B8; margin-top:20px; font-family:'Montserrat',sans-serif;">
+            J&D Automation Industries S.A. de C.V. &bull; Torreón, Coahuila, México.
+        </p>
+        """, unsafe_allow_html=True)
 
 
 def render_login_sidebar():
