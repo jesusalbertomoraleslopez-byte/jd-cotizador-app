@@ -355,6 +355,24 @@ def init_db():
     );
     """)
 
+    # 13. TABLA TPU CUSTOM — Ajustes personalizados de Tarjetas TPU por Partida
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cotizacion_tpu_custom (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cotizacion_id INTEGER NOT NULL,
+        partida_id INTEGER NOT NULL UNIQUE,
+        herramienta_pct REAL,
+        supervision_pct REAL,
+        ind_campo_pct REAL,
+        ind_central_pct REAL,
+        utilidad_pct REAL,
+        horas_hh_factor REAL DEFAULT 1.0,
+        fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id) ON DELETE CASCADE,
+        FOREIGN KEY (partida_id) REFERENCES cotizacion_partidas(id) ON DELETE CASCADE
+    );
+    """)
+
     conn.commit()
 
     # ── Migración segura: columnas de versión/congelamiento en cotizaciones ──

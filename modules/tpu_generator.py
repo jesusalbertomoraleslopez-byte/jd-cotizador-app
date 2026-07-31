@@ -1,7 +1,7 @@
 """
 Módulo de Tarjetas de Precios Unitarios (TPU) — J&D Automation Industries
 Generación e inspección detallada de TPU por partida para propuestas técnicas y contratos.
-Estructura ejecutiva fiel a los estándares oficiales de supervisión y precios unitarios.
+Estructura ejecutiva fiel a los estándares oficiales de supervisión y precios unitarios con balanceador dinámico.
 """
 
 import streamlit as st
@@ -17,7 +17,7 @@ from config import (BRAND_ORANGE, BRAND_CHARCOAL, BRAND_CHARCOAL_MED, BRAND_WHIT
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
@@ -50,11 +50,24 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     """
     Calcula matemáticamente todos los componentes de la Tarjeta de Precio Unitario (TPU)
     para una partida de proyecto garantizando el COINCIDENCIA 100% (MATCH)
-    con el Precio de Venta de la tabla de costos principal de la cotización.
+    con el Precio de Venta de la tabla de costos principal de la cotización y leyendo
+    ajustes personalizados desde la base de datos `cotizacion_tpu_custom`.
     """
     cant_partida = float(p.get('cantidad', 1.0) or 1.0)
     if cant_partida <= 0:
         cant_partida = 1.0
+
+    # Cargar valores personalizados de la BD si existen para esta partida
+    custom_tpu_dict = {}
+    try:
+        conn = get_connection(); cur = conn.cursor()
+        cur.execute("SELECT * FROM cotizacion_tpu_custom WHERE partida_id=?", (p['id'],))
+        r = cur.fetchone()
+        if r:
+            custom_tpu_dict = dict(r)
+        conn.close()
+    except Exception:
+        pass
 
     # 1. MATERIALES (Desglose Unitario)
     mat_rows = []
@@ -74,7 +87,8 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
 
     costo_mat_unitario = total_mat_partida / cant_partida
 
-    # 2. MANO DE OBRA (Desglose Unitario con Costo H-H)
+    # 2. MANO DE OBRA (Desglose Unitario con Costo H-H y Factor Personalizado)
+    hh_factor = float(custom_tpu_dict.get('horas_hh_factor', 1.0) or 1.0)
     mo_rows = []
     total_mo_partida = 0.0
     total_hh_partida = 0.0
@@ -88,11 +102,11 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
 
         # Costo Hora-Hombre = (Sueldo * FASAR * SobreSueldo) / 48 hrs
         costo_hh = (sueldo * fasar * sobre) / 48.0 if sueldo > 0 else 0.0
-        horas_totales = pers * semanas * 48.0
+        horas_totales = pers * semanas * 48.0 * hh_factor
         horas_unitarias = horas_totales / cant_partida
         total_hh_partida += horas_totales
 
-        imp_mo = pers * (sueldo * fasar * sobre) * semanas
+        imp_mo = pers * (sueldo * fasar * sobre) * semanas * hh_factor
         total_mo_partida += imp_mo
 
         mo_rows.append({
@@ -107,13 +121,17 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     horas_hh_unitarias = total_hh_partida / cant_partida
 
     # 3. PORCENTAJES DE HERRAMIENTA Y SUPERVISIÓN SOBRE MANO DE OBRA
-    hta_pct = float(cot_info.get('herramienta_porcentaje', 0.03) or 0.03)
-    if hta_pct > 1.0:
-        hta_pct = hta_pct / 100.0
+    if custom_tpu_dict.get('herramienta_pct') is not None:
+        hta_pct = float(custom_tpu_dict['herramienta_pct']) / 100.0 if float(custom_tpu_dict['herramienta_pct']) > 1.0 else float(custom_tpu_dict['herramienta_pct'])
+    else:
+        hta_pct = float(cot_info.get('herramienta_porcentaje', 0.03) or 0.03)
+        if hta_pct > 1.0: hta_pct = hta_pct / 100.0
 
-    sup_pct = float(cot_info.get('supervision_porcentaje', 0.30) or 0.30)
-    if sup_pct > 1.0:
-        sup_pct = sup_pct / 100.0
+    if custom_tpu_dict.get('supervision_pct') is not None:
+        sup_pct = float(custom_tpu_dict['supervision_pct']) / 100.0 if float(custom_tpu_dict['supervision_pct']) > 1.0 else float(custom_tpu_dict['supervision_pct'])
+    else:
+        sup_pct = float(cot_info.get('supervision_porcentaje', 0.30) or 0.30)
+        if sup_pct > 1.0: sup_pct = sup_pct / 100.0
 
     monto_herramienta_unitario = costo_mo_unitario * hta_pct
     monto_supervision_unitario = costo_mo_unitario * sup_pct
@@ -144,14 +162,23 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
 
     diferencia_indirectos = precio_unitario_target - costo_unitario_base
 
-    # Distribución de Indirectos y Utilidad sobre la diferencia
-    monto_ind_campo = diferencia_indirectos * 0.20
-    monto_ind_central = diferencia_indirectos * 0.40
-    monto_utilidad = diferencia_indirectos * 0.40
+    # Revisar si existen porcentajes explícitos guardados en la BD
+    if custom_tpu_dict.get('ind_campo_pct') is not None and custom_tpu_dict.get('ind_central_pct') is not None and custom_tpu_dict.get('utilidad_pct') is not None:
+        ind_campo_pct = float(custom_tpu_dict['ind_campo_pct'])
+        ind_central_pct = float(custom_tpu_dict['ind_central_pct'])
+        utilidad_pct = float(custom_tpu_dict['utilidad_pct'])
 
-    ind_campo_pct = (monto_ind_campo / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 7.0
-    ind_central_pct = (monto_ind_central / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
-    utilidad_pct = (monto_utilidad / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
+        monto_ind_campo = costo_unitario_base * (ind_campo_pct / 100.0)
+        monto_ind_central = costo_unitario_base * (ind_central_pct / 100.0)
+        monto_utilidad = costo_unitario_base * (utilidad_pct / 100.0)
+    else:
+        monto_ind_campo = diferencia_indirectos * 0.20
+        monto_ind_central = diferencia_indirectos * 0.40
+        monto_utilidad = diferencia_indirectos * 0.40
+
+        ind_campo_pct = (monto_ind_campo / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 7.0
+        ind_central_pct = (monto_ind_central / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
+        utilidad_pct = (monto_utilidad / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
 
     precio_unitario_final = costo_unitario_base + monto_ind_campo + monto_ind_central + monto_utilidad
 
@@ -159,6 +186,7 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     monto_letras = numero_a_letras_mxn(precio_unitario_final, moneda)
 
     return {
+        "partida_id": p['id'],
         "numero_partida": p.get('numero_partida', 1),
         "nombre_partida": p.get('descripcion', 'Partida'),
         "unidad": p.get('unidad', 'pza').lower(),
@@ -181,7 +209,9 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
         "utilidad_pct": utilidad_pct,
         "monto_utilidad": monto_utilidad,
         "precio_unitario_final": precio_unitario_final,
-        "monto_letras": monto_letras
+        "precio_unitario_target": precio_unitario_target,
+        "monto_letras": monto_letras,
+        "custom_tpu_dict": custom_tpu_dict
     }
 
 
@@ -490,14 +520,14 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 
 def render_tpu_generator():
     """
-    Renderiza la interfaz interactiva de Tarjetas de Precios Unitarios (TPU).
+    Renderiza la interfaz interactiva de Tarjetas de Precios Unitarios (TPU) con balanceador dinámico.
     """
     st.markdown(f"""
     <div style="background:{BRAND_WHITE}; border:1px solid {BRAND_BORDER_LIGHT}; border-left:5px solid {BRAND_ORANGE};
                 border-radius:8px; padding:16px 20px; margin-bottom:18px;">
         <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 DESGLOSE DE TARJETAS DE PRECIOS UNITARIOS (TPU)</h3>
         <p style="margin:4px 0 0 0; color:{BRAND_CHARCOAL_MED}; font-size:12px;">
-            Inspección ejecutiva de costo directo, rendimientos H-H, indirectos de campo/central y precio unitario final por partida.
+            Inspección ejecutiva, balanceador dinámico de rendimientos e indirectos y resguardo oficial de Tarjetas TPU.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -570,7 +600,6 @@ def render_tpu_generator():
 
     if selected_p_id == "ALL":
         st.markdown(f"### 📋 Reporte Consolidado de Tarjetas TPU ({len(partidas)} Partidas)")
-        tpu_list = []
         for p in partidas:
             p_id = p['id']
             conn = get_connection(); cur = conn.cursor()
@@ -585,7 +614,6 @@ def render_tpu_generator():
             conn.close()
 
             tpu_data = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
-            tpu_list.append(tpu_data)
             st.markdown(render_tpu_card_html(tpu_data), unsafe_allow_html=True)
             st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
@@ -604,4 +632,95 @@ def render_tpu_generator():
         conn.close()
 
         tpu_data = calcular_tpu_partida(p_info, cot_info, mats, mo, sub, maq)
+
+        # ── INTERFAZ DEL BALANCEADOR DE TPU ──
+        with st.expander("🎛️ Ajustar Porcentajes y Rendimientos TPU (Balanceador Dinámico)", expanded=True):
+            st.markdown("""
+            <p style="font-size:12.5px; color:#475569; margin-bottom:12px;">
+                Modifica los porcentajes de <b>Herramienta</b>, <b>Supervisión</b> o <b>Factor H-H</b>. El <b>PRECIO UNITARIO FINAL</b> permanecerá <b>100% FIJO Y BLOQUEADO</b> ajustando automáticamente el rubro compensador seleccionado.
+            </p>
+            """, unsafe_allow_html=True)
+
+            col_b1, col_b2, col_b3 = st.columns([1, 1, 1])
+            with col_b1:
+                input_sup = st.number_input("👷 Supervisión % (sobre MO)", value=float(tpu_data['sup_pct']), min_value=0.0, max_value=120.0, step=1.0, key=f"sup_{selected_p_id}")
+                input_hta = st.number_input("🛠️ Herramienta % (sobre MO)", value=float(tpu_data['hta_pct']), min_value=0.0, max_value=30.0, step=0.5, key=f"hta_{selected_p_id}")
+
+            with col_b2:
+                input_hh_factor = st.number_input("⏱️ Multiplicador H-H (Rendimiento)", value=float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0), min_value=0.2, max_value=5.0, step=0.05, key=f"hh_{selected_p_id}")
+                target_comp = st.selectbox("⚖️ Rubro que absorbe el ajuste (Compensador)", [
+                    "🏕️ Indirecto de Campo",
+                    "🏢 Indirecto Central",
+                    "💰 Utilidad",
+                    "⚖️ Distribuir equitativamente (33% c/u)"
+                ], key=f"target_{selected_p_id}")
+
+            with col_b3:
+                st.markdown("<p style='font-size:12px; font-weight:800; color:#334155;'>📌 PRECIO UNITARIO TARGET (BLOQUEADO):</p>", unsafe_allow_html=True)
+                st.metric("PRECIO FINAL COTIZADO", f"${tpu_data['precio_unitario_target']:,.2f}")
+
+            # Recálculo simulado en vivo
+            temp_mo_unitario = tpu_data['costo_mo_unitario'] * input_hh_factor
+            temp_hta_monto = temp_mo_unitario * (input_hta / 100.0)
+            temp_sup_monto = temp_mo_unitario * (input_sup / 100.0)
+            temp_mo_factor = temp_mo_unitario + temp_hta_monto + temp_sup_monto
+
+            temp_costo_base = tpu_data['costo_mat_unitario'] + temp_mo_factor
+            temp_dif = max(0.0, tpu_data['precio_unitario_target'] - temp_costo_base)
+
+            if "Campo" in target_comp:
+                sim_campo_monto = temp_dif
+                sim_central_monto = 0.0
+                sim_utilidad_monto = 0.0
+            elif "Central" in target_comp:
+                sim_campo_monto = 0.0
+                sim_central_monto = temp_dif
+                sim_utilidad_monto = 0.0
+            elif "Utilidad" in target_comp:
+                sim_campo_monto = 0.0
+                sim_central_monto = 0.0
+                sim_utilidad_monto = temp_dif
+            else:
+                sim_campo_monto = temp_dif * 0.20
+                sim_central_monto = temp_dif * 0.40
+                sim_utilidad_monto = temp_dif * 0.40
+
+            sim_campo_pct = (sim_campo_monto / temp_costo_base * 100.0) if temp_costo_base > 0 else 0.0
+            sim_central_pct = (sim_central_monto / temp_costo_base * 100.0) if temp_costo_base > 0 else 0.0
+            sim_utilidad_pct = (sim_utilidad_monto / temp_costo_base * 100.0) if temp_costo_base > 0 else 0.0
+
+            st.markdown("---")
+            if st.button("💾 Guardar Ajuste Personalizado de TPU", type="primary", key=f"btn_save_tpu_{selected_p_id}"):
+                conn = get_connection()
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO cotizacion_tpu_custom
+                    (cotizacion_id, partida_id, herramienta_pct, supervision_pct, ind_campo_pct, ind_central_pct, utilidad_pct, horas_hh_factor)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(partida_id) DO UPDATE SET
+                        herramienta_pct = excluded.herramienta_pct,
+                        supervision_pct = excluded.supervision_pct,
+                        ind_campo_pct = excluded.ind_campo_pct,
+                        ind_central_pct = excluded.ind_central_pct,
+                        utilidad_pct = excluded.utilidad_pct,
+                        horas_hh_factor = excluded.horas_hh_factor,
+                        fecha_actualizacion = CURRENT_TIMESTAMP
+                """, (
+                    cot_id, selected_p_id,
+                    input_hta, input_sup,
+                    sim_campo_pct, sim_central_pct, sim_utilidad_pct,
+                    input_hh_factor
+                ))
+                conn.commit()
+                conn.close()
+
+                try:
+                    from database.storage_manager import auto_sync_database_and_storage_to_github
+                    auto_sync_database_and_storage_to_github("Guardar ajuste personalizado TPU partida #" + str(p_info['numero_partida']))
+                except Exception:
+                    pass
+
+                st.success("Ajuste personalizado guardado exitosamente en la Base de Datos.")
+                st.rerun()
+
         st.markdown(render_tpu_card_html(tpu_data), unsafe_allow_html=True)
