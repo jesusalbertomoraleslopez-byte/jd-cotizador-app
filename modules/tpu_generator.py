@@ -1,7 +1,7 @@
 """
 Módulo de Tarjetas de Precios Unitarios (TPU) — J&D Automation Industries
-Generación e inspección detallada de TPU por partida para propuestas técnicas y contratos.
-Estructura ejecutiva fiel a los estándares oficiales de supervisión y precios unitarios con balanceador dinámico.
+Generación e inspección detallada de TPU por partida con pantalla interactiva de ajuste en línea.
+Permite modificar Herramienta, Supervisión, Rendimiento H-H e Indirectos en la misma tarjeta con la simbología [-] [+] [☑️].
 """
 
 import streamlit as st
@@ -50,8 +50,7 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     """
     Calcula matemáticamente todos los componentes de la Tarjeta de Precio Unitario (TPU)
     para una partida de proyecto garantizando el COINCIDENCIA 100% (MATCH)
-    con el Precio de Venta de la tabla de costos principal de la cotización y leyendo
-    ajustes personalizados desde la base de datos `cotizacion_tpu_custom`.
+    con el Precio de Venta de la tabla de costos principal de la cotización.
     """
     cant_partida = float(p.get('cantidad', 1.0) or 1.0)
     if cant_partida <= 0:
@@ -87,7 +86,7 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
 
     costo_mat_unitario = total_mat_partida / cant_partida
 
-    # 2. MANO DE OBRA (Desglose Unitario con Costo H-H y Factor Personalizado)
+    # 2. MANO DE OBRA (Desglose Unitario con Costo H-H)
     hh_factor = float(custom_tpu_dict.get('horas_hh_factor', 1.0) or 1.0)
     mo_rows = []
     total_mo_partida = 0.0
@@ -215,131 +214,6 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     }
 
 
-def render_tpu_card_html(tpu_data):
-    """
-    Renderiza el HTML ejecutivo idéntico a las imágenes de referencia para la TPU.
-    """
-    mat_html_rows = ""
-    for m in tpu_data['mat_rows']:
-        mat_html_rows += f"""
-        <tr>
-            <td style="padding:4px 8px; font-weight:600;">{m['material']}</td>
-            <td style="padding:4px 8px; text-align:center;">{m['unidad']}</td>
-            <td style="padding:4px 8px; text-align:right;">{m['cantidad']:.3f}</td>
-            <td style="padding:4px 8px; text-align:right;">${m['costo']:,.2f}</td>
-            <td style="padding:4px 8px; text-align:right; font-weight:700;">${m['importe']:,.2f}</td>
-        </tr>
-        """
-
-    mo_html_rows = ""
-    for o in tpu_data['mo_rows']:
-        mo_html_rows += f"""
-        <tr>
-            <td style="padding:4px 8px; font-weight:600;">{o['puesto']}</td>
-            <td style="padding:4px 8px; text-align:center;">{o['cantidad']}</td>
-            <td style="padding:4px 8px; text-align:right;">{o['horas']:.3f}</td>
-            <td style="padding:4px 8px; text-align:right;">${o['costo_hh']:,.2f}</td>
-            <td style="padding:4px 8px; text-align:right; font-weight:700;">${o['importe']:,.2f}</td>
-        </tr>
-        """
-
-    return f"""<div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:10px; padding:24px; font-family:'Montserrat', sans-serif; color:#0F172A; max-width:850px; margin:0 auto; box-shadow:0 6px 18px rgba(0,0,0,0.06);">
-        <div style="border-bottom:2px solid #FE8C29; padding-bottom:12px; margin-bottom:16px;">
-            <p style="margin:0; font-size:14px; font-weight:800; color:#FE8C29;">Partida {tpu_data['numero_partida']:04d}: {tpu_data['nombre_partida']}</p>
-            <p style="margin:4px 0 0 0; font-size:12.5px; font-weight:700; color:#334155;">
-                <b>Unidad:</b> {tpu_data['unidad']} &nbsp;|&nbsp; <b>Horas:</b> {tpu_data['horas_hh_unitarias']:.5f} hrs &nbsp;|&nbsp; <b>Alcance:</b> {tpu_data['descripcion']}
-            </p>
-        </div>
-
-        <div style="margin-bottom:16px;">
-            <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-                <thead>
-                    <tr style="background:#1E293B; color:#FFFFFF; text-align:left;">
-                        <th style="padding:6px 8px;">Material</th>
-                        <th style="padding:6px 8px; text-align:center;">Unidad</th>
-                        <th style="padding:6px 8px; text-align:right;">Cantidad</th>
-                        <th style="padding:6px 8px; text-align:right;">Costo</th>
-                        <th style="padding:6px 8px; text-align:right;">Importe</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {mat_html_rows if mat_html_rows else '<tr><td colspan="5" style="padding:6px 8px; color:#94A3B8; font-style:italic;">Sin materiales directos asignados</td></tr>'}
-                    <tr style="border-top:1px solid #CBD5E1; font-weight:800;">
-                        <td colspan="4" style="padding:6px 8px; text-align:right;">Total</td>
-                        <td style="padding:6px 8px; text-align:right; color:#0F172A;">${tpu_data['costo_mat_unitario']:,.2f}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div style="margin-bottom:16px;">
-            <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-                <thead>
-                    <tr style="background:#1E293B; color:#FFFFFF; text-align:left;">
-                        <th style="padding:6px 8px;">Mano de Obra</th>
-                        <th style="padding:6px 8px; text-align:center;">Cantidad</th>
-                        <th style="padding:6px 8px; text-align:right;">Horas</th>
-                        <th style="padding:6px 8px; text-align:right;">Costo HH</th>
-                        <th style="padding:6px 8px; text-align:right;">Importe</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {mo_html_rows if mo_html_rows else '<tr><td colspan="5" style="padding:6px 8px; color:#94A3B8; font-style:italic;">Sin mano de obra directa asignada</td></tr>'}
-                    <tr style="border-top:1px solid #CBD5E1; font-weight:800;">
-                        <td colspan="4" style="padding:4px 8px; text-align:right;">Total</td>
-                        <td style="padding:4px 8px; text-align:right; color:#0F172A;">${tpu_data['costo_mo_unitario']:,.2f}</td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <table style="float:right; width:340px; border-collapse:collapse; font-size:12.5px; margin-top:8px;">
-                <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Herramienta {tpu_data['hta_pct']:.2f}%</td>
-                    <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_herramienta']:,.2f}</td>
-                </tr>
-                <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Supervisión {tpu_data['sup_pct']:.2f}%</td>
-                    <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_supervision']:,.2f}</td>
-                </tr>
-                <tr style="border-top:1.5px solid #434E62; font-weight:800;">
-                    <td style="padding:4px 8px; font-size:12px; text-transform:uppercase;">PRECIO UNITARIO</td>
-                    <td style="padding:4px 8px; text-align:right; font-size:13.5px; color:#0F172A;">${tpu_data['precio_unitario_mo_factor']:,.2f}</td>
-                </tr>
-            </table>
-            <div style="clear:both;"></div>
-        </div>
-
-        <div style="margin-top:16px; border-top:2px solid #E2E8F0; padding-top:12px;">
-            <table style="float:right; width:420px; border-collapse:collapse; font-size:13px;">
-                <tr>
-                    <td style="padding:3px 8px; font-weight:800; color:#334155;">COSTO UNITARIO BASE</td>
-                    <td style="padding:3px 8px; text-align:right; font-weight:800; color:#334155;">${tpu_data['costo_unitario_base']:,.2f}</td>
-                </tr>
-                <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Indirecto de campo ({tpu_data['ind_campo_pct']:.2f}%)</td>
-                    <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_ind_campo']:,.2f}</td>
-                </tr>
-                <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Indirecto Central ({tpu_data['ind_central_pct']:.2f}%)</td>
-                    <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_ind_central']:,.2f}</td>
-                </tr>
-                <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Utilidad ({tpu_data['utilidad_pct']:.2f}%)</td>
-                    <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_utilidad']:,.2f}</td>
-                </tr>
-                <tr style="background:#10B981; color:#FFFFFF; font-weight:900; font-size:15px;">
-                    <td style="padding:8px 12px; border-radius:4px 0 0 4px;">PRECIO UNITARIO FINAL</td>
-                    <td style="padding:8px 12px; text-align:right; border-radius:0 4px 4px 0;">${tpu_data['precio_unitario_final']:,.2f}</td>
-                </tr>
-            </table>
-            <div style="clear:both;"></div>
-            <p style="margin:12px 0 0 0; text-align:right; font-size:11.5px; font-weight:700; color:#334155; font-style:italic;">
-                {tpu_data['monto_letras']}
-            </p>
-        </div>
-    </div>"""
-
-
 def generate_tpu_pdf_oficial(cot_info, partidas):
     """
     Genera un PDF membretado oficial con la hoja membretada J&D (hoja_membretada.png)
@@ -348,7 +222,6 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
     try:
         buffer = io.BytesIO()
 
-        # Canvas con Hoja Membretada Oficial J&D
         class TPUJDFooterCanvas(canvas.Canvas):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
@@ -410,7 +283,6 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 
         story = []
 
-        # Encabezado Principal
         story.append(Paragraph("<b>DESGLOSE OFICIAL DE TARJETAS DE PRECIOS UNITARIOS (TPU)</b>", ParagraphStyle('Title', fontName=bold_f, fontSize=13, leading=16, textColor=colors.HexColor('#FE8C29'))))
         story.append(Paragraph(f"Proyecto: <b>{cot_info.get('proyecto','—')}</b> &bull; Folio: <b>{cot_info.get('folio','—')}</b> &bull; Revisión: <b>{cot_info.get('revision','R0')}</b>", normal_style))
         story.append(Spacer(1, 14))
@@ -510,14 +382,15 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 
 def render_tpu_generator():
     """
-    Renderiza la interfaz interactiva de Tarjetas de Precios Unitarios (TPU) con balanceador dinámico.
+    Renderiza la interfaz interactiva oficial de Tarjetas de Precios Unitarios (TPU)
+    idéntica a la pantalla solicitada por el usuario con controles [-] [+] [☑️] integrados en la tarjeta.
     """
     st.markdown(f"""
     <div style="background:{BRAND_WHITE}; border:1px solid {BRAND_BORDER_LIGHT}; border-left:5px solid {BRAND_ORANGE};
                 border-radius:8px; padding:16px 20px; margin-bottom:18px;">
-        <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 DESGLOSE DE TARJETAS DE PRECIOS UNITARIOS (TPU)</h3>
+        <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 AJUSTADOR Y BALANCEADOR DINÁMICO DE TARJETAS TPU</h3>
         <p style="margin:4px 0 0 0; color:{BRAND_CHARCOAL_MED}; font-size:12px;">
-            Inspección ejecutiva, balanceador dinámico de rendimientos e indirectos y resguardo oficial de Tarjetas TPU.
+            Ajusta en tiempo real los rendimientos, Herramienta %, Supervisión % e Indirectos en la misma tarjeta. El PRECIO UNITARIO FINAL permanece 100% FIJO Y BLOQUEADO.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -537,7 +410,7 @@ def render_tpu_generator():
         return
 
     cot_options = {f"{c['folio']} - {c['proyecto']} ({c.get('cliente','—')})": c['id'] for c in cotizaciones}
-    selected_label = st.selectbox("📌 Seleccionar Cotización Activa para Inspeccionar TPU", list(cot_options.keys()))
+    selected_label = st.selectbox("📌 Seleccionar Cotización Activa para Inspeccionar y Ajustar TPU", list(cot_options.keys()))
     cot_id = cot_options[selected_label]
 
     conn = get_connection()
@@ -585,7 +458,7 @@ def render_tpu_generator():
     partida_opts = {f"Partida {p['numero_partida']:04d}: {p['descripcion'][:50]}": p['id'] for p in partidas}
     partida_opts["🌟 TODAS LAS PARTIDAS (REPORTE CONSOLIDADO DE TPU)"] = "ALL"
 
-    p_label = st.selectbox("🎯 Seleccionar Partida para Generar Tarjeta TPU", list(partida_opts.keys()))
+    p_label = st.selectbox("🎯 Seleccionar Partida para Generar y Ajustar Tarjeta TPU", list(partida_opts.keys()))
     selected_p_id = partida_opts[p_label]
 
     if selected_p_id == "ALL":
@@ -604,7 +477,7 @@ def render_tpu_generator():
             conn.close()
 
             tpu_data = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
-            st.markdown(render_tpu_card_html(tpu_data), unsafe_allow_html=True)
+            render_interactive_tpu_card(tpu_data, cot_info, p, is_read_only=True)
             st.markdown("<div style='margin-bottom:24px;'></div>", unsafe_allow_html=True)
 
     else:
@@ -622,95 +495,257 @@ def render_tpu_generator():
         conn.close()
 
         tpu_data = calcular_tpu_partida(p_info, cot_info, mats, mo, sub, maq)
+        render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False)
 
-        # ── INTERFAZ DEL BALANCEADOR DE TPU ──
-        with st.expander("🎛️ Ajustar Porcentajes y Rendimientos TPU (Balanceador Dinámico)", expanded=True):
-            st.markdown("""
-            <p style="font-size:12.5px; color:#475569; margin-bottom:12px;">
-                Modifica los porcentajes de <b>Herramienta</b>, <b>Supervisión</b> o <b>Factor H-H</b>. El <b>PRECIO UNITARIO FINAL</b> permanecerá <b>100% FIJO Y BLOQUEADO</b> ajustando automáticamente el rubro compensador seleccionado.
+
+def render_interactive_tpu_card(tpu_data, cot_info, p_info, is_read_only=False):
+    """
+    Renderiza la Tarjeta TPU Interactiva con controles [-] [+] [☑️] en cada fila
+    fiel a la pantalla solicitada en el prototipo del usuario.
+    """
+    pid = tpu_data['partida_id']
+
+    # Inicializar estado interactivo en session_state si no existe
+    if f"sup_{pid}" not in st.session_state:
+        st.session_state[f"sup_{pid}"] = float(tpu_data['sup_pct'])
+    if f"hta_{pid}" not in st.session_state:
+        st.session_state[f"hta_{pid}"] = float(tpu_data['hta_pct'])
+    if f"hh_{pid}" not in st.session_state:
+        st.session_state[f"hh_{pid}"] = float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0)
+    if f"comp_{pid}" not in st.session_state:
+        st.session_state[f"comp_{pid}"] = "campo" # campo, central, utilidad
+
+    sup_val = st.session_state[f"sup_{pid}"]
+    hta_val = st.session_state[f"hta_{pid}"]
+    hh_val = st.session_state[f"hh_{pid}"]
+    comp_val = st.session_state[f"comp_{pid}"]
+
+    target_price = tpu_data['precio_unitario_target']
+
+    # Recálculos en vivo manteniendo PRECIO UNITARIO TARGET 100% FIJO
+    c_mo_u = tpu_data['costo_mo_unitario'] * hh_val
+    m_hta_u = c_mo_u * (hta_val / 100.0)
+    m_sup_u = c_mo_u * (sup_val / 100.0)
+    pu_mo_fac = c_mo_u + m_hta_u + m_sup_u
+
+    costo_base = tpu_data['costo_mat_unitario'] + pu_mo_fac
+    dif_ind = max(0.0, target_price - costo_base)
+
+    if comp_val == "campo":
+        m_ind_campo = dif_ind
+        m_ind_central = 0.0
+        m_utilidad = 0.0
+    elif comp_val == "central":
+        m_ind_campo = 0.0
+        m_ind_central = dif_ind
+        m_utilidad = 0.0
+    elif comp_val == "utilidad":
+        m_ind_campo = 0.0
+        m_ind_central = 0.0
+        m_utilidad = dif_ind
+    else: # equitativo
+        m_ind_campo = dif_ind * 0.20
+        m_ind_central = dif_ind * 0.40
+        m_utilidad = dif_ind * 0.40
+
+    p_ind_campo = (m_ind_campo / costo_base * 100.0) if costo_base > 0 else 0.0
+    p_ind_central = (m_ind_central / costo_base * 100.0) if costo_base > 0 else 0.0
+    p_utilidad = (m_utilidad / costo_base * 100.0) if costo_base > 0 else 0.0
+
+    precio_final_sim = costo_base + m_ind_campo + m_ind_central + m_utilidad
+    letras_sim = numero_a_letras_mxn(precio_final_sim, cot_info.get('moneda_cotizacion','MXN'))
+
+    # ── CONTENEDOR VISUAL DE LA TARJETA TPU INTERACTIVA ──
+    st.markdown(f"""
+    <div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:10px; padding:20px;
+                font-family:'Montserrat', sans-serif; color:#0F172A; max-width:900px; margin:0 auto; box-shadow:0 6px 18px rgba(0,0,0,0.06);">
+        <div style="border-bottom:2px solid #FE8C29; padding-bottom:8px; margin-bottom:12px;">
+            <p style="margin:0; font-size:14px; font-weight:800; color:#FE8C29;">Partida {tpu_data['numero_partida']:04d}: {tpu_data['nombre_partida']}</p>
+            <p style="margin:2px 0 0 0; font-size:12px; font-weight:700; color:#334155;">
+                <b>Unidad:</b> {tpu_data['unidad']} &nbsp;|&nbsp; <b>Horas:</b> {tpu_data['horas_hh_unitarias'] * hh_val:.5f} hrs &nbsp;|&nbsp; <b>Alcance:</b> {tpu_data['descripcion']}
             </p>
-            """, unsafe_allow_html=True)
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-            col_b1, col_b2, col_b3 = st.columns([1, 1, 1])
-            with col_b1:
-                input_sup = st.number_input("👷 Supervisión % (sobre MO)", value=float(tpu_data['sup_pct']), min_value=0.0, max_value=120.0, step=1.0, key=f"sup_{selected_p_id}")
-                input_hta = st.number_input("🛠️ Herramienta % (sobre MO)", value=float(tpu_data['hta_pct']), min_value=0.0, max_value=30.0, step=0.5, key=f"hta_{selected_p_id}")
+    # 1. TABLA MATERIALES
+    st.markdown("##### 📦 Materiales")
+    mat_data = []
+    for m in tpu_data['mat_rows']:
+        mat_data.append({
+            "Material": m['material'],
+            "Unidad": m['unidad'],
+            "Cantidad": f"{m['cantidad']:.3f}",
+            "Costo": f"${m['costo']:,.2f}",
+            "Importe": f"${m['importe']:,.2f}"
+        })
+    if mat_data:
+        st.table(pd.DataFrame(mat_data))
+    else:
+        st.caption("Sin materiales directos asignados.")
+    st.markdown(f"<p style='text-align:right; font-weight:800; margin-top:-10px;'>Total Material: <b>${tpu_data['costo_mat_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
 
-            with col_b2:
-                input_hh_factor = st.number_input("⏱️ Multiplicador H-H (Rendimiento)", value=float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0), min_value=0.2, max_value=5.0, step=0.05, key=f"hh_{selected_p_id}")
-                target_comp = st.selectbox("⚖️ Rubro que absorbe el ajuste (Compensador)", [
-                    "🏕️ Indirecto de Campo",
-                    "🏢 Indirecto Central",
-                    "💰 Utilidad",
-                    "⚖️ Distribuir equitativamente (33% c/u)"
-                ], key=f"target_{selected_p_id}")
-
-            with col_b3:
-                st.markdown("<p style='font-size:12px; font-weight:800; color:#334155;'>📌 PRECIO UNITARIO TARGET (BLOQUEADO):</p>", unsafe_allow_html=True)
-                st.metric("PRECIO FINAL COTIZADO", f"${tpu_data['precio_unitario_target']:,.2f}")
-
-            # Recálculo simulado en vivo
-            temp_mo_unitario = tpu_data['costo_mo_unitario'] * input_hh_factor
-            temp_hta_monto = temp_mo_unitario * (input_hta / 100.0)
-            temp_sup_monto = temp_mo_unitario * (input_sup / 100.0)
-            temp_mo_factor = temp_mo_unitario + temp_hta_monto + temp_sup_monto
-
-            temp_costo_base = tpu_data['costo_mat_unitario'] + temp_mo_factor
-            temp_dif = max(0.0, tpu_data['precio_unitario_target'] - temp_costo_base)
-
-            if "Campo" in target_comp:
-                sim_campo_monto = temp_dif
-                sim_central_monto = 0.0
-                sim_utilidad_monto = 0.0
-            elif "Central" in target_comp:
-                sim_campo_monto = 0.0
-                sim_central_monto = temp_dif
-                sim_utilidad_monto = 0.0
-            elif "Utilidad" in target_comp:
-                sim_campo_monto = 0.0
-                sim_central_monto = 0.0
-                sim_utilidad_monto = temp_dif
+    # 2. TABLA MANO DE OBRA + BOTONES DE RENDIMIENTO INLINE
+    st.markdown("##### 👷 Mano de Obra y Rendimientos H-H")
+    for o in tpu_data['mo_rows']:
+        cm1, cm2, cm3, cm4, cm5 = st.columns([3, 1, 3, 1.5, 1.5])
+        with cm1:
+            st.markdown(f"**{o['puesto']}**")
+        with cm2:
+            st.markdown(f"Cant: **{o['cantidad']}**")
+        with cm3:
+            if not is_read_only:
+                b1, b2, b3 = st.columns([1, 1, 2])
+                with b1:
+                    if st.button("➖", key=f"dec_hh_{pid}_{o['puesto']}"):
+                        st.session_state[f"hh_{pid}"] = max(0.2, round(st.session_state[f"hh_{pid}"] - 0.05, 2))
+                        st.rerun()
+                with b2:
+                    if st.button("➕", key=f"inc_hh_{pid}_{o['puesto']}"):
+                        st.session_state[f"hh_{pid}"] = round(st.session_state[f"hh_{pid}"] + 0.05, 2)
+                        st.rerun()
+                with b3:
+                    st.caption(f"Horas: **{o['horas'] * hh_val:.3f}**")
             else:
-                sim_campo_monto = temp_dif * 0.20
-                sim_central_monto = temp_dif * 0.40
-                sim_utilidad_monto = temp_dif * 0.40
+                st.markdown(f"Horas: **{o['horas'] * hh_val:.3f}**")
+        with cm4:
+            st.markdown(f"Costo HH: **${o['costo_hh']:,.2f}**")
+        with cm5:
+            st.markdown(f"Importe: **${o['importe'] * hh_val:,.2f}**")
 
-            sim_campo_pct = (sim_campo_monto / temp_costo_base * 100.0) if temp_costo_base > 0 else 0.0
-            sim_central_pct = (sim_central_monto / temp_costo_base * 100.0) if temp_costo_base > 0 else 0.0
-            sim_utilidad_pct = (sim_utilidad_monto / temp_costo_base * 100.0) if temp_costo_base > 0 else 0.0
+    st.markdown(f"<p style='text-align:right; font-weight:800;'>Total Mano de Obra: <b>${c_mo_u:,.2f}</b></p>", unsafe_allow_html=True)
+    st.divider()
 
-            st.markdown("---")
-            if st.button("💾 Guardar Ajuste Personalizado de TPU", type="primary", key=f"btn_save_tpu_{selected_p_id}"):
-                conn = get_connection()
-                cur = conn.cursor()
-                cur.execute("""
-                    INSERT INTO cotizacion_tpu_custom
-                    (cotizacion_id, partida_id, herramienta_pct, supervision_pct, ind_campo_pct, ind_central_pct, utilidad_pct, horas_hh_factor)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(partida_id) DO UPDATE SET
-                        herramienta_pct = excluded.herramienta_pct,
-                        supervision_pct = excluded.supervision_pct,
-                        ind_campo_pct = excluded.ind_campo_pct,
-                        ind_central_pct = excluded.ind_central_pct,
-                        utilidad_pct = excluded.utilidad_pct,
-                        horas_hh_factor = excluded.horas_hh_factor,
-                        fecha_actualizacion = CURRENT_TIMESTAMP
-                """, (
-                    cot_id, selected_p_id,
-                    input_hta, input_sup,
-                    sim_campo_pct, sim_central_pct, sim_utilidad_pct,
-                    input_hh_factor
-                ))
-                conn.commit()
-                conn.close()
+    # 3. HERRAMIENTA Y SUPERVISIÓN CON BOTONES INLINE [-] [+] [☑️]
+    st.markdown("##### 🛠️ Factores Directos (Herramienta y Supervisión)")
+    
+    # Herramienta Row
+    ch1, ch2, ch3, ch4 = st.columns([2, 3, 2, 2])
+    with ch1:
+        st.markdown("**Herramienta**")
+    with ch2:
+        if not is_read_only:
+            hb1, hb2, hb3 = st.columns([1, 1, 2])
+            with hb1:
+                if st.button("➖", key=f"dec_hta_{pid}"):
+                    st.session_state[f"hta_{pid}"] = max(0.0, round(st.session_state[f"hta_{pid}"] - 0.5, 1))
+                    st.rerun()
+            with hb2:
+                if st.button("➕", key=f"inc_hta_{pid}"):
+                    st.session_state[f"hta_{pid}"] = round(st.session_state[f"hta_{pid}"] + 0.5, 1)
+                    st.rerun()
+            with hb3:
+                st.markdown(f"**{hta_val:.2f}%**")
+        else:
+            st.markdown(f"**{hta_val:.2f}%**")
+    with ch3:
+        st.caption("Calculado sobre MO")
+    with ch4:
+        st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_hta_u:,.2f}</p>", unsafe_allow_html=True)
 
-                try:
-                    from database.storage_manager import auto_sync_database_and_storage_to_github
-                    auto_sync_database_and_storage_to_github("Guardar ajuste personalizado TPU partida #" + str(p_info['numero_partida']))
-                except Exception:
-                    pass
+    # Supervisión Row
+    cs1, cs2, cs3, cs4 = st.columns([2, 3, 2, 2])
+    with cs1:
+        st.markdown("**Supervisión**")
+    with cs2:
+        if not is_read_only:
+            sb1, sb2, sb3 = st.columns([1, 1, 2])
+            with sb1:
+                if st.button("➖", key=f"dec_sup_{pid}"):
+                    st.session_state[f"sup_{pid}"] = max(0.0, round(st.session_state[f"sup_{pid}"] - 1.0, 1))
+                    st.rerun()
+            with sb2:
+                if st.button("➕", key=f"inc_sup_{pid}"):
+                    st.session_state[f"sup_{pid}"] = round(st.session_state[f"sup_{pid}"] + 1.0, 1)
+                    st.rerun()
+            with sb3:
+                st.markdown(f"**{sup_val:.2f}%**")
+        else:
+            st.markdown(f"**{sup_val:.2f}%**")
+    with cs3:
+        st.caption("Calculado sobre MO")
+    with cs4:
+        st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_sup_u:,.2f}</p>", unsafe_allow_html=True)
 
-                st.success("Ajuste personalizado guardado exitosamente en la Base de Datos.")
-                st.rerun()
+    st.markdown(f"<p style='text-align:right; font-weight:800; color:#0F172A; font-size:14px;'>PRECIO UNITARIO MO + FACTORES: <b>${pu_mo_fac:,.2f}</b></p>", unsafe_allow_html=True)
+    st.divider()
 
-        st.markdown(render_tpu_card_html(tpu_data), unsafe_allow_html=True)
+    # 4. COSTO UNITARIO BASE, INDIRECTOS Y UTILIDAD FINAL CON MARCADOR DE COMPENSACIÓN [☑️]
+    st.markdown("##### 🏢 Costo Base, Indirectos y Utilidad Final")
+    st.markdown(f"<p style='font-size:14px; font-weight:800; color:#334155;'>COSTO UNITARIO BASE: <b>${costo_base:,.2f}</b></p>", unsafe_allow_html=True)
+
+    # Selectbox de Compensación [☑️]
+    if not is_read_only:
+        comp_selection = st.radio(
+            "☑️ Marca el rubro que absorbe el ajuste dinámico (Compensador Target):",
+            ["🏕️ Indirecto de Campo", "🏢 Indirecto Central", "💰 Utilidad"],
+            index=0 if comp_val == "campo" else (1 if comp_val == "central" else 2),
+            horizontal=True,
+            key=f"radio_comp_{pid}"
+        )
+        if "Campo" in comp_selection: st.session_state[f"comp_{pid}"] = "campo"
+        elif "Central" in comp_selection: st.session_state[f"comp_{pid}"] = "central"
+        else: st.session_state[f"comp_{pid}"] = "utilidad"
+
+    ci1, ci2, ci3 = st.columns([3, 2, 2])
+    with ci1: st.markdown(f"Indirecto de Campo ({p_ind_campo:.2f}%)")
+    with ci2: st.caption("Compensado" if comp_val == "campo" else "Fijo")
+    with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_ind_campo:,.2f}</p>", unsafe_allow_html=True)
+
+    ci1, ci2, ci3 = st.columns([3, 2, 2])
+    with ci1: st.markdown(f"Indirecto Central ({p_ind_central:.2f}%)")
+    with ci2: st.caption("Compensado" if comp_val == "central" else "Fijo")
+    with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_ind_central:,.2f}</p>", unsafe_allow_html=True)
+
+    ci1, ci2, ci3 = st.columns([3, 2, 2])
+    with ci1: st.markdown(f"Utilidad ({p_utilidad:.2f}%)")
+    with ci2: st.caption("Compensado" if comp_val == "utilidad" else "Fijo")
+    with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_utilidad:,.2f}</p>", unsafe_allow_html=True)
+
+    # PRECIO UNITARIO FINAL - VERDE RESALTADO
+    st.markdown(f"""
+    <div style="background:#10B981; color:#FFFFFF; padding:12px 16px; border-radius:6px; margin-top:14px;
+                display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:15px; font-weight:900;">PRECIO UNITARIO FINAL</span>
+        <span style="font-size:18px; font-weight:900;">${precio_final_sim:,.2f}</span>
+    </div>
+    <p style="text-align:right; font-size:11.5px; font-weight:700; color:#334155; font-style:italic; margin-top:6px;">
+        {letras_sim}
+    </p>
+    """, unsafe_allow_html=True)
+
+    # Botón de Guardado Persistente en Base de Datos
+    if not is_read_only:
+        st.markdown("---")
+        if st.button("💾 GUARDAR AJUSTE TPU EN BASE DE DATOS Y RE-GENERAR PDF", type="primary", key=f"btn_save_inline_{pid}"):
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO cotizacion_tpu_custom
+                (cotizacion_id, partida_id, herramienta_pct, supervision_pct, ind_campo_pct, ind_central_pct, utilidad_pct, horas_hh_factor)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(partida_id) DO UPDATE SET
+                    herramienta_pct = excluded.herramienta_pct,
+                    supervision_pct = excluded.supervision_pct,
+                    ind_campo_pct = excluded.ind_campo_pct,
+                    ind_central_pct = excluded.ind_central_pct,
+                    utilidad_pct = excluded.utilidad_pct,
+                    horas_hh_factor = excluded.horas_hh_factor,
+                    fecha_actualizacion = CURRENT_TIMESTAMP
+            """, (
+                cot_info['id'], pid,
+                hta_val, sup_val,
+                p_ind_campo, p_ind_central, p_utilidad,
+                hh_val
+            ))
+            conn.commit()
+            conn.close()
+
+            try:
+                from database.storage_manager import auto_sync_database_and_storage_to_github
+                auto_sync_database_and_storage_to_github("Guardar ajuste interactivo TPU partida #" + str(p_info['numero_partida']))
+            except Exception:
+                pass
+
+            st.success("Ajuste guardado exitosamente en la Base de Datos y sincronizado.")
+            st.rerun()
