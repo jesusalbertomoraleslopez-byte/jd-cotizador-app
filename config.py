@@ -275,59 +275,103 @@ CUSTOM_CSS = f"""
         color: {BRAND_ORANGE} !important;
     }}
 
-    /* ─── SELECTBOX Y DROPDOWNS ─── */
-    [data-baseweb="select"] > div {{
-        background-color: {BRAND_WHITE} !important;
-        border: 1px solid {BRAND_CHARCOAL_LIGHT} !important;
-        border-radius: 6px !important;
-        color: {BRAND_CHARCOAL} !important;
-        font-weight: 600 !important;
+    /* ─── GARANTIZAR ALTO CONTRASTE Y MÁXIMA LEGIBILIDAD EN WIDGETS Y LABELS ─── */
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] label,
+    label[data-testid="stWidgetLabel"],
+    .stWidget label,
+    .stWidget label p {{
+        color: #1E293B !important;
+        font-weight: 700 !important;
         font-size: 13px !important;
     }}
-    [data-baseweb="select"] > div:hover {{
-        border-color: {BRAND_ORANGE} !important;
+
+    /* Inputs, Number Inputs, Text Areas y Selectboxes */
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="base-input"],
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextArea"] textarea,
+    textarea,
+    input {{
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        font-weight: 700 !important;
+        font-size: 13.5px !important;
+        border: 1.5px solid #94A3B8 !important;
+        border-radius: 6px !important;
     }}
 
-    /* ─── ALERTAS E INFO BOXES ─── */
-    div[data-testid="stAlert"] {{
-        border-radius: 8px !important;
-        font-family: 'Montserrat', sans-serif !important;
-    }}
-
-    /* ─── FILE UPLOADER CORPORATIVO ─── */
-    section[data-testid="stFileUploaderDropzone"],
-    div[data-testid="stFileUploaderDropzone"] {{
-        background-color: {BRAND_WHITE} !important;
-        border: 2px dashed {BRAND_ORANGE} !important;
-        border-radius: 10px !important;
-        padding: 14px !important;
-    }}
-    section[data-testid="stFileUploaderDropzone"]:hover,
-    div[data-testid="stFileUploaderDropzone"]:hover {{
-        border-color: {BRAND_ORANGE_DARK} !important;
-        background-color: {BRAND_HOVER_BG} !important;
-    }}
-
-    /* ─── DATAFRAMES / TABLAS ─── */
-    .stDataFrame thead th {{
-        background-color: {BRAND_CHARCOAL} !important;
-        color: {BRAND_WHITE} !important;
-        font-family: 'Montserrat', sans-serif !important;
+    /* Texto seleccionado y spans dentro de Selectbox e Inputs */
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] div,
+    div[data-baseweb="select"] input,
+    div[data-baseweb="input"] input,
+    div[data-baseweb="base-input"] input {{
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
         font-weight: 700 !important;
     }}
 
-    /* ─── INPUTS / FORMS ─── */
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input {{
-        border-radius: 6px !important;
-        border: 1px solid {BRAND_CHARCOAL_LIGHT} !important;
-        font-family: 'Montserrat', sans-serif !important;
-        font-size: 13px !important;
+    /* Menú desplegable de opciones en Selectbox (Pop-over) */
+    ul[data-baseweb="menu"],
+    li[data-baseweb="option"],
+    div[role="listbox"],
+    div[data-baseweb="popover"] {{
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
     }}
-    [data-testid="stTextInput"] input:focus,
-    [data-testid="stNumberInput"] input:focus {{
-        border-color: {BRAND_ORANGE} !important;
-        box-shadow: 0 0 0 2px rgba(254,140,41,0.15) !important;
+    li[data-baseweb="option"] span,
+    div[role="option"] span,
+    div[role="option"] {{
+        color: #0F172A !important;
+        font-weight: 700 !important;
+    }}
+    li[data-baseweb="option"]:hover,
+    li[data-baseweb="option"][aria-selected="true"],
+    div[role="option"]:hover {{
+        background-color: #FFF7ED !important;
+        color: #FE8C29 !important;
+    }}
+
+    /* Campos deshabilitados (Modo Lectura / Congelado / Textarea Audit) */
+    [aria-disabled="true"] input,
+    [aria-disabled="true"] textarea,
+    [aria-disabled="true"] div,
+    input:disabled,
+    textarea:disabled {{
+        background-color: #F8FAFC !important;
+        color: #1E293B !important;
+        -webkit-text-fill-color: #1E293B !important;
+        font-weight: 700 !important;
+        border: 1.5px solid #CBD5E1 !important;
+    }}
+
+    /* Placeholders */
+    input::placeholder,
+    textarea::placeholder,
+    ::placeholder {{
+        color: #64748B !important;
+        -webkit-text-fill-color: #64748B !important;
+        font-weight: 500 !important;
+        opacity: 1 !important;
+    }}
+
+    /* ─── DATAFRAMES / TABLAS ─── */
+    .stDataFrame thead th,
+    div[data-testid="stTable"] th {{
+        background-color: #1E293B !important;
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+        font-family: 'Montserrat', sans-serif !important;
+    }}
+    .stDataFrame tbody td,
+    div[data-testid="stTable"] td {{
+        color: #0F172A !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
     }}
 
     /* ─── DIVIDERS CON COLOR ─── */
