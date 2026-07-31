@@ -17,14 +17,40 @@ from config import (BRAND_ORANGE, BRAND_CHARCOAL, BRAND_CHARCOAL_MED, BRAND_WHIT
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+
+def _get_jd_fonts():
+    bold_font = "Helvetica-Bold"
+    regular_font = "Helvetica"
+    try:
+        brand_dir = r"C:\Users\albertol\JD_Automation_Brand_Assets\Imagen Corporativa J&D\JD_ENTREGABLES\JD_TIPOGRAFIAS\nexa"
+        heavy_path = os.path.join(brand_dir, "Nexa-Heavy.ttf")
+        light_path = os.path.join(brand_dir, "Nexa-ExtraLight.ttf")
+
+        if os.path.exists(heavy_path):
+            if "Nexa-Heavy" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont('Nexa-Heavy', heavy_path))
+            bold_font = "Nexa-Heavy"
+
+        if os.path.exists(light_path):
+            if "Nexa-Light" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont('Nexa-Light', light_path))
+            regular_font = "Nexa-Light"
+    except Exception:
+        pass
+    return bold_font, regular_font
 
 
 def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, gastos_partida=0.0):
     """
     Calcula matemáticamente todos los componentes de la Tarjeta de Precio Unitario (TPU)
-    para una partida de proyecto conforme al formato institucional J&D.
+    para una partida de proyecto garantizando el COINCIDENCIA 100% (MATCH)
+    con el Precio de Venta de la tabla de costos principal de la cotización.
     """
     cant_partida = float(p.get('cantidad', 1.0) or 1.0)
     if cant_partida <= 0:
@@ -80,20 +106,19 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     costo_mo_unitario = total_mo_partida / cant_partida
     horas_hh_unitarias = total_hh_partida / cant_partida
 
-    # 3. PORCENTAJES DE HERRAMIENTA Y SUPERVISIÓN CALCULADOS SOBRE MANO DE OBRA (40% - 65%)
-    hta_pct = float(cot_info.get('herramienta_porcentaje', 0.06) or 0.06)
+    # 3. PORCENTAJES DE HERRAMIENTA Y SUPERVISIÓN SOBRE MANO DE OBRA
+    hta_pct = float(cot_info.get('herramienta_porcentaje', 0.03) or 0.03)
     if hta_pct > 1.0:
         hta_pct = hta_pct / 100.0
 
-    sup_pct = float(cot_info.get('supervision_porcentaje', 0.62) or 0.62)
+    sup_pct = float(cot_info.get('supervision_porcentaje', 0.30) or 0.30)
     if sup_pct > 1.0:
         sup_pct = sup_pct / 100.0
 
-    # Herramienta y Supervisión sobre la Mano de Obra
     monto_herramienta_unitario = costo_mo_unitario * hta_pct
     monto_supervision_unitario = costo_mo_unitario * sup_pct
 
-    # Subtotal Mano de Obra + Herramienta + Supervisión
+    # Subtotal Mano de Obra con Factores
     precio_unitario_mo_factor = costo_mo_unitario + monto_herramienta_unitario + monto_supervision_unitario
 
     # 4. SUBCONTRATOS, MAQUINARIA Y GASTOS (Asignados por unidad)
@@ -101,23 +126,32 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     total_maq = sum(float(mq.get('total_mxn', 0) or 0) for mq in maquinaria) / cant_partida
     total_gas = gastos_partida / cant_partida
 
-    # COSTO UNITARIO BASE = Materiales + Subtotal MO (con Factores Hta/Sup) + Sub + Maq + Gastos
+    # COSTO UNITARIO BASE
     costo_unitario_base = costo_mat_unitario + precio_unitario_mo_factor + total_sub + total_maq + total_gas
 
-    # 5. INDIRECTOS Y UTILIDAD (Calculados sobre COSTO UNITARIO BASE)
-    ind_campo_pct = 0.0388   # 3.88% Indirecto de Campo
-    ind_central_pct = 0.1200 # 12.00% Indirecto Central
-    utilidad_pct = 0.0800    # 8.00% Utilidad
+    # 5. GARANTIZAR MATCH CON EL PRECIO DE VENTA OFICIAL DE LA COTIZACIÓN
+    pv_registrado = float(p.get('precio_venta', 0) or 0)
+    if pv_registrado > 0:
+        precio_unitario_target = pv_registrado / cant_partida
+    else:
+        cd_tot = float(p.get('costo_directo_total', 0) or 0)
+        mg_global = float(cot_info.get('margen_porcentaje', 0.35) or 0.35)
+        m_factor = (1.0 - mg_global) if mg_global < 1.0 else 0.65
+        precio_unitario_target = (cd_tot / m_factor) / cant_partida if cd_tot > 0 else (costo_unitario_base / 0.65)
 
-    mg_global = float(cot_info.get('margen_porcentaje', 0.30) or 0.30)
-    if mg_global > 0:
-        utilidad_pct = mg_global * 0.40
-        ind_central_pct = mg_global * 0.40
-        ind_campo_pct = mg_global * 0.20
+    if precio_unitario_target < costo_unitario_base:
+        precio_unitario_target = costo_unitario_base
 
-    monto_ind_campo = costo_unitario_base * ind_campo_pct
-    monto_ind_central = costo_unitario_base * ind_central_pct
-    monto_utilidad = costo_unitario_base * utilidad_pct
+    diferencia_indirectos = precio_unitario_target - costo_unitario_base
+
+    # Distribución de Indirectos y Utilidad sobre la diferencia
+    monto_ind_campo = diferencia_indirectos * 0.20
+    monto_ind_central = diferencia_indirectos * 0.40
+    monto_utilidad = diferencia_indirectos * 0.40
+
+    ind_campo_pct = (monto_ind_campo / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 7.0
+    ind_central_pct = (monto_ind_central / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
+    utilidad_pct = (monto_utilidad / costo_unitario_base * 100.0) if costo_unitario_base > 0 else 14.0
 
     precio_unitario_final = costo_unitario_base + monto_ind_campo + monto_ind_central + monto_utilidad
 
@@ -140,11 +174,11 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
         "monto_supervision": monto_supervision_unitario,
         "precio_unitario_mo_factor": precio_unitario_mo_factor,
         "costo_unitario_base": costo_unitario_base,
-        "ind_campo_pct": ind_campo_pct * 100.0,
+        "ind_campo_pct": ind_campo_pct,
         "monto_ind_campo": monto_ind_campo,
-        "ind_central_pct": ind_central_pct * 100.0,
+        "ind_central_pct": ind_central_pct,
         "monto_ind_central": monto_ind_central,
-        "utilidad_pct": utilidad_pct * 100.0,
+        "utilidad_pct": utilidad_pct,
         "monto_utilidad": monto_utilidad,
         "precio_unitario_final": precio_unitario_final,
         "monto_letras": monto_letras
@@ -185,27 +219,27 @@ def render_tpu_card_html(tpu_data):
         
         <!-- ENCABEZADO DE TARJETA TPU -->
         <div style="border-bottom:2px solid #FE8C29; padding-bottom:12px; margin-bottom:16px;">
-            <p style="margin:0; font-size:14px; font-weight:800; color:#434E62;"><b>Partida:</b> {tpu_data['numero_partida']:04d}</p>
-            <h3 style="margin:4px 0; font-size:17px; font-weight:900; color:#FE8C29;"><b>Nombre:</b> {tpu_data['nombre_partida']}</h3>
-            <p style="margin:2px 0; font-size:13px; font-weight:700;"><b>Unidad:</b> {tpu_data['unidad']} &nbsp;&bull;&nbsp; <b>Horas:</b> {tpu_data['horas_hh_unitarias']:.5f}</p>
-            <p style="margin:4px 0 0 0; font-size:12px; color:#475569; font-style:italic;"><b>Descripción:</b> {tpu_data['descripcion']}</p>
+            <p style="margin:0; font-size:14px; font-weight:800; color:#FE8C29;">Partida {tpu_data['numero_partida']:04d}: {tpu_data['nombre_partida']}</p>
+            <p style="margin:4px 0 0 0; font-size:12.5px; font-weight:700; color:#334155;">
+                <b>Unidad:</b> {tpu_data['unidad']} &nbsp;|&nbsp; <b>Horas:</b> {tpu_data['horas_hh_unitarias']:.5f} hrs &nbsp;|&nbsp; <b>Alcance:</b> {tpu_data['descripcion']}
+            </p>
         </div>
 
         <!-- SECCIÓN 1: MATERIAL -->
         <div style="margin-bottom:16px;">
             <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
                 <thead>
-                    <tr style="border-bottom:1.5px solid #434E62; text-align:left;">
-                        <th style="padding:4px 8px; color:#434E62;">Material</th>
-                        <th style="padding:4px 8px; text-align:center; color:#434E62;">Unidad</th>
-                        <th style="padding:4px 8px; text-align:right; color:#434E62;">Cantidad</th>
-                        <th style="padding:4px 8px; text-align:right; color:#434E62;">Costo</th>
-                        <th style="padding:4px 8px; text-align:right; color:#434E62;">Importe</th>
+                    <tr style="background:#1E293B; color:#FFFFFF; text-align:left;">
+                        <th style="padding:6px 8px;">Material</th>
+                        <th style="padding:6px 8px; text-align:center;">Unidad</th>
+                        <th style="padding:6px 8px; text-align:right;">Cantidad</th>
+                        <th style="padding:6px 8px; text-align:right;">Costo</th>
+                        <th style="padding:6px 8px; text-align:right;">Importe</th>
                     </tr>
                 </thead>
                 <tbody>
                     {mat_html_rows if mat_html_rows else '<tr><td colspan="5" style="padding:6px 8px; color:#94A3B8; font-style:italic;">Sin materiales directos asignados</td></tr>'}
-                    <tr style="font-weight:800;">
+                    <tr style="border-top:1px solid #CBD5E1; font-weight:800;">
                         <td colspan="4" style="padding:6px 8px; text-align:right;">Total</td>
                         <td style="padding:6px 8px; text-align:right; color:#0F172A;">${tpu_data['costo_mat_unitario']:,.2f}</td>
                     </tr>
@@ -217,17 +251,17 @@ def render_tpu_card_html(tpu_data):
         <div style="margin-bottom:16px;">
             <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
                 <thead>
-                    <tr style="border-bottom:1.5px solid #434E62; text-align:left;">
-                        <th style="padding:4px 8px; color:#434E62;">Mano de Obra</th>
-                        <th style="padding:4px 8px; text-align:center; color:#434E62;">Cantidad</th>
-                        <th style="padding:4px 8px; text-align:right; color:#434E62;">Horas</th>
-                        <th style="padding:4px 8px; text-align:right; color:#434E62;">Costo HH</th>
-                        <th style="padding:4px 8px; text-align:right; color:#434E62;">Importe</th>
+                    <tr style="background:#1E293B; color:#FFFFFF; text-align:left;">
+                        <th style="padding:6px 8px;">Mano de Obra</th>
+                        <th style="padding:6px 8px; text-align:center;">Cantidad</th>
+                        <th style="padding:6px 8px; text-align:right;">Horas</th>
+                        <th style="padding:6px 8px; text-align:right;">Costo HH</th>
+                        <th style="padding:6px 8px; text-align:right;">Importe</th>
                     </tr>
                 </thead>
                 <tbody>
                     {mo_html_rows if mo_html_rows else '<tr><td colspan="5" style="padding:6px 8px; color:#94A3B8; font-style:italic;">Sin mano de obra directa asignada</td></tr>'}
-                    <tr style="font-weight:800;">
+                    <tr style="border-top:1px solid #CBD5E1; font-weight:800;">
                         <td colspan="4" style="padding:4px 8px; text-align:right;">Total</td>
                         <td style="padding:4px 8px; text-align:right; color:#0F172A;">${tpu_data['costo_mo_unitario']:,.2f}</td>
                     </tr>
@@ -237,17 +271,15 @@ def render_tpu_card_html(tpu_data):
             <!-- FACTORES DE HERRAMIENTA Y SUPERVISIÓN DE MANO DE OBRA -->
             <table style="float:right; width:340px; border-collapse:collapse; font-size:12.5px; margin-top:8px;">
                 <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Herramienta</td>
-                    <td style="padding:3px 8px; text-align:right; color:#2563EB; font-weight:700;">{tpu_data['hta_pct']:.2f}%</td>
+                    <td style="padding:3px 8px; font-weight:600;">Herramienta {tpu_data['hta_pct']:.2f}%</td>
                     <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_herramienta']:,.2f}</td>
                 </tr>
                 <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Supervisión</td>
-                    <td style="padding:3px 8px; text-align:right; color:#2563EB; font-weight:700;">{tpu_data['sup_pct']:.2f}%</td>
+                    <td style="padding:3px 8px; font-weight:600;">Supervisión {tpu_data['sup_pct']:.2f}%</td>
                     <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_supervision']:,.2f}</td>
                 </tr>
                 <tr style="border-top:1.5px solid #434E62; font-weight:800;">
-                    <td colspan="2" style="padding:4px 8px; font-size:12px; text-transform:uppercase;">PRECIO UNITARIO</td>
+                    <td style="padding:4px 8px; font-size:12px; text-transform:uppercase;">PRECIO UNITARIO</td>
                     <td style="padding:4px 8px; text-align:right; font-size:13.5px; color:#0F172A;">${tpu_data['precio_unitario_mo_factor']:,.2f}</td>
                 </tr>
             </table>
@@ -256,28 +288,25 @@ def render_tpu_card_html(tpu_data):
 
         <!-- SECCIÓN 3: COSTO BASE, INDIRECTOS Y UTILIDAD FINAL -->
         <div style="margin-top:16px; border-top:2px solid #E2E8F0; padding-top:12px;">
-            <table style="float:right; width:380px; border-collapse:collapse; font-size:13px;">
+            <table style="float:right; width:420px; border-collapse:collapse; font-size:13px;">
                 <tr>
-                    <td colspan="2" style="padding:3px 8px; font-weight:800; color:#334155;">COSTO UNITARIO BASE</td>
+                    <td style="padding:3px 8px; font-weight:800; color:#334155;">COSTO UNITARIO BASE</td>
                     <td style="padding:3px 8px; text-align:right; font-weight:800; color:#334155;">${tpu_data['costo_unitario_base']:,.2f}</td>
                 </tr>
                 <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Indirecto de campo</td>
-                    <td style="padding:3px 8px; text-align:right; color:#475569;">{tpu_data['ind_campo_pct']:.2f}%</td>
+                    <td style="padding:3px 8px; font-weight:600;">Indirecto de campo ({tpu_data['ind_campo_pct']:.2f}%)</td>
                     <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_ind_campo']:,.2f}</td>
                 </tr>
                 <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Indirecto Central</td>
-                    <td style="padding:3px 8px; text-align:right; color:#475569;">{tpu_data['ind_central_pct']:.2f}%</td>
+                    <td style="padding:3px 8px; font-weight:600;">Indirecto Central ({tpu_data['ind_central_pct']:.2f}%)</td>
                     <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_ind_central']:,.2f}</td>
                 </tr>
                 <tr>
-                    <td style="padding:3px 8px; font-weight:600;">Utilidad</td>
-                    <td style="padding:3px 8px; text-align:right; color:#475569;">{tpu_data['utilidad_pct']:.2f}%</td>
+                    <td style="padding:3px 8px; font-weight:600;">Utilidad ({tpu_data['utilidad_pct']:.2f}%)</td>
                     <td style="padding:3px 8px; text-align:right; font-weight:700;">${tpu_data['monto_utilidad']:,.2f}</td>
                 </tr>
                 <tr style="background:#10B981; color:#FFFFFF; font-weight:900; font-size:15px;">
-                    <td colspan="2" style="padding:8px 12px; border-radius:4px 0 0 4px;">PRECIO UNITARIO</td>
+                    <td style="padding:8px 12px; border-radius:4px 0 0 4px;">PRECIO UNITARIO FINAL</td>
                     <td style="padding:8px 12px; text-align:right; border-radius:0 4px 4px 0;">${tpu_data['precio_unitario_final']:,.2f}</td>
                 </tr>
             </table>
@@ -293,10 +322,58 @@ def render_tpu_card_html(tpu_data):
 
 def generate_tpu_pdf_oficial(cot_info, partidas):
     """
-    Genera un PDF membretado oficial con el desglose de todas las Tarjetas de Precios Unitarios (TPU).
+    Genera un PDF membretado oficial con la hoja membretada J&D (hoja_membretada.png)
+    y colores institucionales, garantizando el MATCH del 100% con la tabla de cotización.
     """
     try:
         buffer = io.BytesIO()
+
+        # Canvas con Hoja Membretada Oficial J&D
+        class TPUJDFooterCanvas(canvas.Canvas):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.pages = []
+                bg_path = get_brand_asset_path("hoja_membretada.png")
+                if os.path.exists(bg_path):
+                    try:
+                        self.saveState()
+                        self.drawImage(bg_path, 0, 0, width=612, height=792)
+                        self.restoreState()
+                    except Exception:
+                        pass
+
+            def _startPage(self):
+                super()._startPage()
+                bg_path = get_brand_asset_path("hoja_membretada.png")
+                if os.path.exists(bg_path):
+                    try:
+                        self.saveState()
+                        self.drawImage(bg_path, 0, 0, width=612, height=792)
+                        self.restoreState()
+                    except Exception:
+                        pass
+
+            def showPage(self):
+                self.pages.append(dict(self.__dict__))
+                self._startPage()
+
+            def save(self):
+                num_pages = len(self.pages)
+                for page in self.pages:
+                    self.__dict__.update(page)
+                    self.draw_page_decorations(num_pages)
+                    super().showPage()
+                super().save()
+
+            def draw_page_decorations(self, page_count):
+                self.saveState()
+                bold_f, reg_f = _get_jd_fonts()
+                self.setFont(reg_f, 8)
+                self.setFillColor(colors.HexColor('#64748B'))
+                self.drawString(36, 30, f"Propuesta Técnica y Comercial: {cot_info.get('proyecto','—')} | Ref: {cot_info.get('folio','—')}")
+                self.drawRightString(612 - 36, 30, f"Página {self._pageNumber} de {page_count}")
+                self.restoreState()
+
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
@@ -305,21 +382,25 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             topMargin=54,
             bottomMargin=54
         )
-        bold_f, reg_f = "Helvetica-Bold", "Helvetica"
+        bold_f, reg_f = _get_jd_fonts()
 
-        title_style = ParagraphStyle('TPUTitle', fontName=bold_f, fontSize=13, leading=16, textColor=colors.HexColor('#FE8C29'))
+        phead_style = ParagraphStyle('PHead', fontName=bold_f, fontSize=10, leading=13, textColor=colors.HexColor('#FE8C29'))
         normal_style = ParagraphStyle('TPUNormal', fontName=reg_f, fontSize=8.5, leading=11, textColor=colors.HexColor('#0F172A'))
         header_style = ParagraphStyle('TPUHeader', fontName=bold_f, fontSize=8.5, leading=10, textColor=colors.white, alignment=1)
 
         story = []
 
-        # Encabezado General
-        story.append(Paragraph("<b>J&D AUTOMATION INDUSTRIES S.A. DE C.V.</b>", title_style))
-        story.append(Paragraph(f"<b>DESGLOSE OFICIAL DE TARJETAS DE PRECIOS UNITARIOS (TPU)</b>", ParagraphStyle('Sub', fontName=bold_f, fontSize=10, textColor=colors.HexColor('#434E62'))))
-        story.append(Paragraph(f"Proyecto: {cot_info.get('proyecto','—')} &bull; Folio: {cot_info.get('folio','—')} &bull; Rev: {cot_info.get('revision','R0')}", normal_style))
-        story.append(Spacer(1, 10))
+        # Encabezado Principal
+        story.append(Paragraph("<b>DESGLOSE OFICIAL DE TARJETAS DE PRECIOS UNITARIOS (TPU)</b>", ParagraphStyle('Title', fontName=bold_f, fontSize=13, leading=16, textColor=colors.HexColor('#FE8C29'))))
+        story.append(Paragraph(f"Proyecto: <b>{cot_info.get('proyecto','—')}</b> &bull; Folio: <b>{cot_info.get('folio','—')}</b> &bull; Revisión: <b>{cot_info.get('revision','R0')}</b>", normal_style))
+        story.append(Spacer(1, 14))
 
+        idx = 0
         for p in partidas:
+            idx += 1
+            if idx > 1:
+                story.append(Spacer(1, 14))
+
             p_id = p['id']
             conn = get_connection(); cur = conn.cursor()
             cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (p_id,))
@@ -334,8 +415,8 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 
             tpu = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
 
-            story.append(Paragraph(f"<b>Partida {tpu['numero_partida']:04d}:</b> {tpu['nombre_partida']}", ParagraphStyle('PHead', fontName=bold_f, fontSize=9.5, textColor=colors.HexColor('#FE8C29'))))
-            story.append(Paragraph(f"Unidad: {tpu['unidad']} | Horas: {tpu['horas_hh_unitarias']:.5f} hrs | Alcance: {tpu['descripcion'][:120]}", normal_style))
+            story.append(Paragraph(f"<b>Partida {tpu['numero_partida']:04d}:</b> {tpu['nombre_partida']}", phead_style))
+            story.append(Paragraph(f"Unidad: {tpu['unidad']} | Horas: {tpu['horas_hh_unitarias']:.5f} hrs | Alcance: {tpu['descripcion']}", normal_style))
             story.append(Spacer(1, 4))
 
             # Tabla Materiales
@@ -359,7 +440,7 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             story.append(t_mat)
             story.append(Spacer(1, 6))
 
-            # Tabla Mano de Obra
+            # Tabla Mano de Obra + Factores
             mo_table_data = [[Paragraph("<b>Mano de Obra</b>", header_style), Paragraph("<b>Cantidad</b>", header_style), Paragraph("<b>Horas</b>", header_style), Paragraph("<b>Costo HH</b>", header_style), Paragraph("<b>Importe</b>", header_style)]]
             for o in tpu['mo_rows']:
                 mo_table_data.append([
@@ -383,7 +464,7 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             story.append(t_mo)
             story.append(Spacer(1, 6))
 
-            # Resumen Final TPU
+            # Resumen Final TPU con MATCH exacto al PDF de la cotización
             tot_table_data = [
                 [Paragraph("<b>COSTO UNITARIO BASE</b>", ParagraphStyle('B', fontName=bold_f, fontSize=8.5)), Paragraph(f"<b>${tpu['costo_unitario_base']:,.2f}</b>", ParagraphStyle('BR', fontName=bold_f, fontSize=8.5, alignment=2))],
                 [Paragraph(f"Indirecto de Campo ({tpu['ind_campo_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_ind_campo']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
@@ -401,7 +482,7 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             story.append(Paragraph(f"<i>{tpu['monto_letras']}</i>", ParagraphStyle('Lit', fontName=reg_f, fontSize=8, alignment=2, textColor=colors.HexColor('#475569'))))
             story.append(Spacer(1, 14))
 
-        doc.build(story)
+        doc.build(story, canvasmaker=TPUJDFooterCanvas)
         return buffer.getvalue()
     except Exception:
         return b""
@@ -463,7 +544,7 @@ def render_tpu_generator():
             <span style="font-size:16px; font-weight:900; color:{BRAND_CHARCOAL};">EXPORTACIÓN OFICIAL DE TARJETAS DE PRECIOS UNITARIOS</span>
         </div>
         <p style="font-size:12px; color:{BRAND_CHARCOAL_MED}; margin:0 0 12px 0;">
-            Descarga el reporte completo en formato PDF membretado con todas las Tarjetas de Precios Unitarios (TPU) de la cotización <b>{cot_info.get('folio')}</b>.
+            Descarga el reporte completo en formato PDF membretado con la Hoja Membretada Oficial J&D y el MATCH 100% de precios de la cotización <b>{cot_info.get('folio')}</b>.
         </p>
     </div>
     """, unsafe_allow_html=True)
