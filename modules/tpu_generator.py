@@ -1,7 +1,7 @@
 """
 Módulo de Tarjetas de Precios Unitarios (TPU) — J&D Automation Industries
 Generación e inspección detallada de TPU por partida con pantalla interactiva de ajuste en línea.
-Implementa la regla de selección de 2 casillas (1 para SUBIR y 1 para BAJAR) en una sola pantalla unificada.
+Integra Maquinaria y Equipo como rubro directo del Costo = (Material + Mano de Obra + Maquinaria).
 """
 
 import streamlit as st
@@ -48,7 +48,8 @@ def _get_jd_fonts():
 
 def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, gastos_partida=0.0):
     """
-    Calcula todos los componentes de la Tarjeta TPU garantizando MATCH 100% con la cotización.
+    Calcula todos los componentes de la Tarjeta TPU integrando Maquinaria como rubro directo
+    junto a Materiales y Mano de Obra: COSTO BASE = (Materiales + MO + Maquinaria + Subcontratos + Gastos).
     """
     cant_partida = float(p.get('cantidad', 1.0) or 1.0)
     if cant_partida <= 0:
@@ -116,7 +117,25 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     costo_mo_unitario = total_mo_partida / cant_partida
     horas_hh_unitarias = total_hh_partida / cant_partida
 
-    # 3. PORCENTAJES DE HERRAMIENTA Y SUPERVISIÓN
+    # 3. MAQUINARIA Y EQUIPO (Desglose Unitario Directo)
+    maq_rows = []
+    total_maq_partida = 0.0
+    for mq in maquinaria:
+        mq_cant = float(mq.get('cantidad', 1) or 1)
+        mq_cu = float(mq.get('costo_unitario', 0) or 0)
+        mq_tot = float(mq.get('total_mxn', 0) or (mq_cant * mq_cu))
+        total_maq_partida += mq_tot
+        maq_rows.append({
+            "equipo": mq.get('nombre', mq.get('clave', 'Maquinaria')),
+            "unidad": mq.get('unidad', 'dia').lower(),
+            "cantidad": mq_cant / cant_partida,
+            "costo": mq_cu,
+            "importe": mq_tot / cant_partida
+        })
+
+    costo_maq_unitario = total_maq_partida / cant_partida
+
+    # 4. PORCENTAJES DE HERRAMIENTA Y SUPERVISIÓN
     if custom_tpu_dict.get('herramienta_pct') is not None:
         hta_pct = float(custom_tpu_dict['herramienta_pct']) / 100.0 if float(custom_tpu_dict['herramienta_pct']) > 1.0 else float(custom_tpu_dict['herramienta_pct'])
     else:
@@ -134,14 +153,14 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
 
     precio_unitario_mo_factor = costo_mo_unitario + monto_herramienta_unitario + monto_supervision_unitario
 
-    # 4. SUBCONTRATOS, MAQUINARIA Y GASTOS
+    # 5. SUBCONTRATOS Y GASTOS
     total_sub = sum(float(s.get('importe_mxn', 0) or 0) for s in subcontratos) / cant_partida
-    total_maq = sum(float(mq.get('total_mxn', 0) or 0) for mq in maquinaria) / cant_partida
     total_gas = gastos_partida / cant_partida
 
-    costo_unitario_base = costo_mat_unitario + precio_unitario_mo_factor + total_sub + total_maq + total_gas
+    # COSTO UNITARIO BASE = Materiales + MO (con Factores) + Maquinaria + Sub + Gastos
+    costo_unitario_base = costo_mat_unitario + precio_unitario_mo_factor + costo_maq_unitario + total_sub + total_gas
 
-    # 5. PRECIO TARGET Y BALANCE DE INDIRECTOS
+    # 6. PRECIO TARGET Y BALANCE DE INDIRECTOS
     pv_registrado = float(p.get('precio_venta', 0) or 0)
     if pv_registrado > 0:
         precio_unitario_target = pv_registrado / cant_partida
@@ -190,6 +209,9 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
         "costo_mat_unitario": costo_mat_unitario,
         "mo_rows": mo_rows,
         "costo_mo_unitario": costo_mo_unitario,
+        "maq_rows": maq_rows,
+        "costo_maq_unitario": costo_maq_unitario,
+        "costo_directo_insumos": costo_mat_unitario + costo_mo_unitario + costo_maq_unitario,
         "hta_pct": hta_pct * 100.0,
         "monto_herramienta": monto_herramienta_unitario,
         "sup_pct": sup_pct * 100.0,
@@ -212,7 +234,7 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
 def generate_tpu_pdf_oficial(cot_info, partidas):
     """
     Genera un PDF membretado oficial con la hoja membretada J&D (hoja_membretada.png)
-    y colores institucionales, garantizando el MATCH del 100% con la tabla de cotización.
+    incluyendo Materiales, Mano de Obra, Maquinaria, Factores e Indirectos.
     """
     try:
         buffer = io.BytesIO()
@@ -316,7 +338,7 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
                     Paragraph(f"${m['costo']:,.2f}", normal_style),
                     Paragraph(f"${m['importe']:,.2f}", normal_style)
                 ])
-            mat_table_data.append([Paragraph("<b>Total</b>", ParagraphStyle('R', fontName=bold_f, fontSize=8.5, alignment=2)), "", "", "", Paragraph(f"<b>${tpu['costo_mat_unitario']:,.2f}</b>", ParagraphStyle('R2', fontName=bold_f, fontSize=8.5, alignment=2))])
+            mat_table_data.append([Paragraph("<b>Total Material</b>", ParagraphStyle('R', fontName=bold_f, fontSize=8.5, alignment=2)), "", "", "", Paragraph(f"<b>${tpu['costo_mat_unitario']:,.2f}</b>", ParagraphStyle('R2', fontName=bold_f, fontSize=8.5, alignment=2))])
 
             t_mat = Table(mat_table_data, colWidths=[240, 50, 60, 80, 80])
             t_mat.setStyle(TableStyle([
@@ -326,6 +348,28 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
             ]))
             story.append(t_mat)
             story.append(Spacer(1, 6))
+
+            # Tabla Maquinaria (si aplica)
+            if tpu['maq_rows']:
+                maq_table_data = [[Paragraph("<b>Maquinaria / Equipo</b>", header_style), Paragraph("<b>Unidad</b>", header_style), Paragraph("<b>Cantidad</b>", header_style), Paragraph("<b>Costo</b>", header_style), Paragraph("<b>Importe</b>", header_style)]]
+                for mq in tpu['maq_rows']:
+                    maq_table_data.append([
+                        Paragraph(mq['equipo'], normal_style),
+                        Paragraph(mq['unidad'], normal_style),
+                        Paragraph(f"{mq['cantidad']:.3f}", normal_style),
+                        Paragraph(f"${mq['costo']:,.2f}", normal_style),
+                        Paragraph(f"${mq['importe']:,.2f}", normal_style)
+                    ])
+                maq_table_data.append([Paragraph("<b>Total Maquinaria</b>", ParagraphStyle('R', fontName=bold_f, fontSize=8.5, alignment=2)), "", "", "", Paragraph(f"<b>${tpu['costo_maq_unitario']:,.2f}</b>", ParagraphStyle('R2', fontName=bold_f, fontSize=8.5, alignment=2))])
+
+                t_maq = Table(maq_table_data, colWidths=[240, 50, 60, 80, 80])
+                t_maq.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')),
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
+                    ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
+                ]))
+                story.append(t_maq)
+                story.append(Spacer(1, 6))
 
             # Tabla Mano de Obra + Factores
             mo_table_data = [[Paragraph("<b>Mano de Obra</b>", header_style), Paragraph("<b>Cantidad</b>", header_style), Paragraph("<b>Horas</b>", header_style), Paragraph("<b>Costo HH</b>", header_style), Paragraph("<b>Importe</b>", header_style)]]
@@ -337,10 +381,10 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
                     Paragraph(f"${o['costo_hh']:,.2f}", normal_style),
                     Paragraph(f"${o['importe']:,.2f}", normal_style)
                 ])
-            mo_table_data.append([Paragraph("<b>Total</b>", ParagraphStyle('R', fontName=bold_f, fontSize=8.5, alignment=2)), "", "", "", Paragraph(f"<b>${tpu['costo_mo_unitario']:,.2f}</b>", ParagraphStyle('R2', fontName=bold_f, fontSize=8.5, alignment=2))])
+            mo_table_data.append([Paragraph("<b>Total MO</b>", ParagraphStyle('R', fontName=bold_f, fontSize=8.5, alignment=2)), "", "", "", Paragraph(f"<b>${tpu['costo_mo_unitario']:,.2f}</b>", ParagraphStyle('R2', fontName=bold_f, fontSize=8.5, alignment=2))])
             mo_table_data.append([Paragraph(f"Herramienta {tpu['hta_pct']:.2f}%", normal_style), "", "", "", Paragraph(f"${tpu['monto_herramienta']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))])
             mo_table_data.append([Paragraph(f"Supervisión {tpu['sup_pct']:.2f}%", normal_style), "", "", "", Paragraph(f"${tpu['monto_supervision']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))])
-            mo_table_data.append([Paragraph("<b>PRECIO UNITARIO</b>", ParagraphStyle('B', fontName=bold_f, fontSize=8.5)), "", "", "", Paragraph(f"<b>${tpu['precio_unitario_mo_factor']:,.2f}</b>", ParagraphStyle('BR', fontName=bold_f, fontSize=8.5, alignment=2))])
+            mo_table_data.append([Paragraph("<b>PRECIO UNITARIO MO + FACTORES</b>", ParagraphStyle('B', fontName=bold_f, fontSize=8.5)), "", "", "", Paragraph(f"<b>${tpu['precio_unitario_mo_factor']:,.2f}</b>", ParagraphStyle('BR', fontName=bold_f, fontSize=8.5, alignment=2))])
 
             t_mo = Table(mo_table_data, colWidths=[240, 50, 60, 80, 80])
             t_mo.setStyle(TableStyle([
@@ -378,14 +422,14 @@ def generate_tpu_pdf_oficial(cot_info, partidas):
 def render_tpu_generator():
     """
     Renderiza la interfaz interactiva oficial de Tarjetas de Precios Unitarios (TPU)
-    idéntica a la pantalla solicitada por el usuario con controles [-] [+] y regla de 2 casillas (1 SUBIR, 1 BAJAR).
+    idéntica a la pantalla solicitada por el usuario con controles [-] [+] e integrando Maquinaria.
     """
     st.markdown(f"""
     <div style="background:{BRAND_WHITE}; border:1px solid {BRAND_BORDER_LIGHT}; border-left:5px solid {BRAND_ORANGE};
                 border-radius:8px; padding:16px 20px; margin-bottom:18px;">
         <h3 style="margin:0; color:{BRAND_CHARCOAL}; font-size:18px; font-weight:800;">🎴 PANTALLA UNIFICADA DE AJUSTE Y BALANCE TPU</h3>
         <p style="margin:4px 0 0 0; color:{BRAND_CHARCOAL_MED}; font-size:12px;">
-            Selecciona la casilla <b>☑️ SUBE</b> (Driver que aumenta) y la casilla <b>☑️ BAJA</b> (Rubro que absorbe el cambio). El PRECIO UNITARIO FINAL permanece 100% FIJO.
+            Ajusta Materiales, Mano de Obra y <b>Maquinaria y Equipo</b>. Selecciona <b>☑️ SUBE</b> y <b>☑️ BAJA</b> manteniendo el PRECIO UNITARIO FINAL 100% FIJO.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -495,7 +539,7 @@ def render_tpu_generator():
 def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=False):
     """
     Renderiza la Pantalla Única de Ajuste TPU idéntica a la imagen de prototipo del usuario.
-    Regla: Permite seleccionar 2 casillas globales (1 para SUBIR y 1 para BAJAR).
+    Regla: Permite seleccionar 2 casillas globales (1 para SUBIR y 1 para BAJAR) integrando Maquinaria.
     """
     pid = tpu_data['partida_id']
 
@@ -508,9 +552,9 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
         st.session_state[f"hh_{pid}"] = float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0)
 
     if f"sube_driver_{pid}" not in st.session_state:
-        st.session_state[f"sube_driver_{pid}"] = "supervision" # 'supervision', 'herramienta', 'mo_hh'
+        st.session_state[f"sube_driver_{pid}"] = "supervision"
     if f"baja_driver_{pid}" not in st.session_state:
-        st.session_state[f"baja_driver_{pid}"] = "ind_campo" # 'ind_campo', 'ind_central', 'utilidad'
+        st.session_state[f"baja_driver_{pid}"] = "ind_campo"
 
     sup_val = st.session_state[f"sup_{pid}"]
     hta_val = st.session_state[f"hta_{pid}"]
@@ -520,13 +564,13 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
 
     target_price = tpu_data['precio_unitario_target']
 
-    # Recálculos en vivo
+    # Recálculos en vivo integrando Maquinaria en el Costo Directo Base
     c_mo_u = tpu_data['costo_mo_unitario'] * hh_val
     m_hta_u = c_mo_u * (hta_val / 100.0)
     m_sup_u = c_mo_u * (sup_val / 100.0)
     pu_mo_fac = c_mo_u + m_hta_u + m_sup_u
 
-    costo_base = tpu_data['costo_mat_unitario'] + pu_mo_fac
+    costo_base = tpu_data['costo_mat_unitario'] + pu_mo_fac + tpu_data['costo_maq_unitario']
     dif_ind = max(0.0, target_price - costo_base)
 
     if baja_sel == "ind_campo":
@@ -580,7 +624,22 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
         st.caption("Sin materiales directos asignados.")
     st.markdown(f"<p style='text-align:right; font-weight:800; margin-top:-10px;'>Total Material: <b>${tpu_data['costo_mat_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
 
-    # 2. SELECCIÓN DE REGLA DE CASILLAS (1 SUBIR, 1 BAJAR)
+    # 2. TABLA MAQUINARIA Y EQUIPO
+    if tpu_data['maq_rows']:
+        st.markdown("##### 🚜 Maquinaria y Equipo")
+        maq_data = []
+        for mq in tpu_data['maq_rows']:
+            maq_data.append({
+                "Equipo / Maquinaria": mq['equipo'],
+                "Unidad": mq['unidad'],
+                "Cantidad": f"{mq['cantidad']:.3f}",
+                "Costo": f"${mq['costo']:,.2f}",
+                "Importe": f"${mq['importe']:,.2f}"
+            })
+        st.table(pd.DataFrame(maq_data))
+        st.markdown(f"<p style='text-align:right; font-weight:800; margin-top:-10px;'>Total Maquinaria: <b>${tpu_data['costo_maq_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
+
+    # 3. SELECCIÓN DE REGLA DE CASILLAS (1 SUBIR, 1 BAJAR)
     if not is_read_only:
         st.markdown("<div style='background:#FFF7ED; border:1px solid #FFEDD5; border-radius:6px; padding:8px 12px; margin:10px 0;'><b>⚡ Regla de Ajuste de Casillas:</b> Selecciona 1 casilla para <b>SUBIR (🟢)</b> y 1 casilla para <b>BAJAR (🔴)</b>.</div>", unsafe_allow_html=True)
         r_c1, r_c2 = st.columns(2)
@@ -604,7 +663,7 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
             elif "Central" in sel_baja: st.session_state[f"baja_driver_{pid}"] = "ind_central"
             else: st.session_state[f"baja_driver_{pid}"] = "utilidad"
 
-    # 3. TABLA MANO DE OBRA Y CONTROLES INLINE
+    # 4. TABLA MANO DE OBRA Y CONTROLES INLINE
     st.markdown("##### 👷 Mano de Obra")
     for o in tpu_data['mo_rows']:
         cm1, cm2, cm3, cm4, cm5 = st.columns([3, 1, 3, 1.5, 1.5])
@@ -630,7 +689,7 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
     st.markdown(f"<p style='text-align:right; font-weight:800;'>Total Mano de Obra: <b>${c_mo_u:,.2f}</b></p>", unsafe_allow_html=True)
     st.divider()
 
-    # 4. HERRAMIENTA Y SUPERVISIÓN
+    # 5. HERRAMIENTA Y SUPERVISIÓN
     ch1, ch2, ch3, ch4 = st.columns([2, 3, 2, 2])
     with ch1:
         prefix = "🟢 " if sube_sel == "herramienta" else ""
@@ -676,8 +735,8 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
     st.markdown(f"<p style='text-align:right; font-weight:800; color:#0F172A; font-size:14px;'>PRECIO UNITARIO MO + FACTORES: <b>${pu_mo_fac:,.2f}</b></p>", unsafe_allow_html=True)
     st.divider()
 
-    # 5. COSTO BASE, INDIRECTOS Y UTILIDAD
-    st.markdown(f"<p style='font-size:14px; font-weight:800; color:#334155;'>COSTO UNITARIO BASE: <b>${costo_base:,.2f}</b></p>", unsafe_allow_html=True)
+    # 6. COSTO BASE = (MATERIAL + MANO DE OBRA + MAQUINARIA + SUB + GASTOS)
+    st.markdown(f"<p style='font-size:14px; font-weight:800; color:#334155;'>COSTO UNITARIO BASE = (Material + MO + Maquinaria + Sub + Gastos): <b>${costo_base:,.2f}</b></p>", unsafe_allow_html=True)
 
     ci1, ci2, ci3 = st.columns([3, 2, 2])
     with ci1:
