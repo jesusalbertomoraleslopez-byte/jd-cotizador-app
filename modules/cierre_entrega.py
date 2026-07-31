@@ -773,7 +773,14 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None):
 
     msg['Subject'] = f"Propuesta Técnica y Comercial: {proyecto} | Ref: {folio_corto}"
     msg['From'] = "Ing. David Alaniz <ventas@jdautomation.mx>"
-    msg['To'] = f"{contacto} <contacto@cliente.com>"
+    
+    client_email = cot_info.get('email_contacto') or cot_info.get('email_cliente') or cot_info.get('email') or cot_info.get('correo')
+    if client_email and str(client_email).strip():
+        msg['To'] = f"{contacto} <{str(client_email).strip()}>"
+    else:
+        msg['To'] = f"{contacto} <contacto.cliente@empresa.com>"
+
+    msg['Cc'] = "alberto.morales@jydautomation.com.mx, david.alaniz@jydautomation.com.mx, ventas@jydautomation.com.mx"
 
     logo_img_tag = f'<div style="background:#FFFFFF; padding:8px 16px; border-radius:8px; display:inline-block; margin-bottom:12px;"><img src="data:image/png;base64,{logo_b64}" width="{logo_w}" height="{logo_h}" style="width:{logo_w}px; height:{logo_h}px; display:block; border:0;" alt="J&amp;D Automation"></div>' if logo_b64 else ''
 
@@ -1193,6 +1200,8 @@ def render_cierre_entrega():
                 pass
         logo_img_html_v = f'<div style="background:#FFFFFF; padding:8px 16px; border-radius:8px; display:inline-block; margin-bottom:12px;"><img src="data:image/png;base64,{logo_b64_v}" width="{logo_w_v}" height="{logo_h_v}" style="width:{logo_w_v}px; height:{logo_h_v}px; display:block;" alt="J&amp;D Automation"></div>' if logo_b64_v else ''
 
+        client_email_v = cot_info.get('email_contacto') or cot_info.get('email_cliente') or cot_info.get('email') or cot_info.get('correo') or 'contacto.cliente@empresa.com'
+
         st.markdown(f"""
         <div style="background:{BRAND_WHITE};border:1px solid {BRAND_BORDER_LIGHT};padding:22px;border-radius:10px;font-family:'Segoe UI',sans-serif;margin-bottom:12px;">
             <div style="background:#1E293B;padding:16px 20px;border-bottom:4px solid #FE8C29;border-radius:6px 6px 0 0;">
@@ -1201,6 +1210,8 @@ def render_cierre_entrega():
                 <p style="color:#FE8C29;margin:2px 0 0 0;font-size:11px;font-weight:bold;text-transform:uppercase;">Propuesta Técnica &amp; Comercial de Automatización</p>
             </div>
             <div style="padding:16px 0;font-size:13px;color:#334155;line-height:1.6;">
+                <p><b>Para (To):</b> <code>{contacto_saludo_v} &lt;{client_email_v}&gt;</code></p>
+                <p><b>Copia (Cc):</b> <code>alberto.morales@jydautomation.com.mx, david.alaniz@jydautomation.com.mx, ventas@jydautomation.com.mx</code></p>
                 <p><b>Asunto:</b> <code>Propuesta Técnica y Comercial: {cot_info.get('proyecto','AUTOMATIZACIÓN DE LÍNEA DE PROCESO')} | Ref: {folio_corto_v}</code></p>
                 <hr style="border:none;border-top:1px dashed #CBD5E1;margin:12px 0;">
                 <p><b>Estimado(a) {contacto_saludo_v},</b></p>
