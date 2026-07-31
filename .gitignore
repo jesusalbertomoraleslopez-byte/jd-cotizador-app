@@ -7,8 +7,8 @@ venv/
 ENV/
 
 # Database
-*.db
-*.sqlite3
+!database/cotizador.db
+!cotizaciones_guardadas/
 
 # Sample & Test Files
 test_*.pdf

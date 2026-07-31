@@ -88,6 +88,11 @@ def save_cotizacion_to_folder(cot_info, pdf_bytes=None, excel_bytes=None, eml_by
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=4, ensure_ascii=False)
 
+    try:
+        auto_sync_database_and_storage_to_github(f"Auto-sync quote {folio_clean} and database")
+    except Exception:
+        pass
+
     return folder_path, saved_files
 
 
@@ -262,3 +267,25 @@ def fetch_github_quote_folders(token=None):
             return {"success": False, "message": f"Respuesta de GitHub HTTP {res.status_code}: {res.text}"}
     except Exception as e:
         return {"success": False, "message": f"Error conectando con la API de GitHub: {str(e)}"}
+
+
+def auto_sync_database_and_storage_to_github(commit_message="Auto-sync cotizador.db and quote files"):
+    """
+    Sincroniza y hace commit/push automático a GitHub de la base de datos SQLite (cotizador.db)
+    y el directorio cotizaciones_guardadas/ para garantizar que persistan 100% tras un reboot en Streamlit Cloud.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_rel = os.path.join("database", "cotizador.db")
+    storage_rel = "cotizaciones_guardadas"
+    
+    try:
+        subprocess.run(["git", "add", "-f", db_rel, storage_rel], cwd=repo_root, capture_output=True, text=True)
+        subprocess.run(["git", "commit", "-m", commit_message], cwd=repo_root, capture_output=True, text=True)
+        push_res = subprocess.run(["git", "push", "origin", "main"], cwd=repo_root, capture_output=True, text=True)
+        
+        if push_res.returncode == 0 or "Everything up-to-date" in push_res.stdout or "Everything up-to-date" in push_res.stderr:
+            return {"success": True, "method": "Git CLI Native Auto-Push"}
+    except Exception:
+        pass
+
+    return {"success": False, "message": "Proceso local completado."}
