@@ -776,22 +776,11 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
     precio_final_sim = costo_base + m_ind_campo + m_ind_central + m_utilidad
     letras_sim = numero_a_letras_mxn(precio_final_sim, cot_info.get('moneda_cotizacion','MXN'))
 
-    # ── TARJETA TPU UNIFICADA CON CONTROLES INLINE Y REGLA DE 2 CASILLAS ──
-    st.markdown(f"""
-    <div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:10px; padding:20px;
-                font-family:'Montserrat', sans-serif; color:#0F172A; max-width:920px; margin:0 auto; box-shadow:0 6px 18px rgba(0,0,0,0.06);">
-        
-        <div style="border-bottom:2px solid #FE8C29; padding-bottom:8px; margin-bottom:12px;">
-            <p style="margin:0; font-size:14px; font-weight:800; color:#FE8C29;">Partida {tpu_data['numero_partida']:04d}: {tpu_data['nombre_partida']}</p>
-            <p style="margin:2px 0 0 0; font-size:12px; font-weight:700; color:#334155;">
-                <b>Unidad:</b> {tpu_data['unidad']} &nbsp;|&nbsp; <b>Horas:</b> {tpu_data['horas_hh_unitarias'] * hh_val:.5f} hrs &nbsp;|&nbsp; <b>Alcance:</b> {tpu_data['descripcion']}
-            </p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # ── BANNER DE PARTIDA (HTML COMPACTO SIN MULTILÍNEAS PARA EVITAR BLOQUE DE CÓDIGO) ──
+    st.markdown(f"""<div style="background:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #FE8C29; border-radius:8px; padding:10px 14px; margin-bottom:10px;"><p style="margin:0; font-size:12.5px; font-weight:800; color:#FE8C29;">Partida {tpu_data['numero_partida']:04d}: {tpu_data['nombre_partida']}</p><p style="margin:2px 0 0 0; font-size:11px; font-weight:600; color:#334155;"><b>Unidad:</b> {tpu_data['unidad']} &nbsp;|&nbsp; <b>Horas:</b> {tpu_data['horas_hh_unitarias'] * hh_val:.4f} hrs &nbsp;|&nbsp; <b>Alcance:</b> {tpu_data['descripcion']}</p></div>""", unsafe_allow_html=True)
 
     # 1. TABLA MATERIALES
-    st.markdown("##### 📦 Material")
+    st.markdown("<p style='font-size:12px; font-weight:800; color:#1E293B; margin:8px 0 4px 0;'>📦 Materiales Directos</p>", unsafe_allow_html=True)
     mat_data = []
     for m in tpu_data['mat_rows']:
         mat_data.append({
@@ -805,11 +794,11 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
         st.table(pd.DataFrame(mat_data))
     else:
         st.caption("Sin materiales directos asignados.")
-    st.markdown(f"<p style='text-align:right; font-weight:800; margin-top:-10px;'>Total Material: <b>${tpu_data['costo_mat_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:right; font-size:11.5px; font-weight:800; margin-top:-8px;'>Total Material: <b>${tpu_data['costo_mat_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
 
     # 2. TABLA MAQUINARIA Y EQUIPO
     if tpu_data['maq_rows']:
-        st.markdown("##### 🚜 Maquinaria y Equipo")
+        st.markdown("<p style='font-size:12px; font-weight:800; color:#1E293B; margin:8px 0 4px 0;'>🚜 Maquinaria y Equipo</p>", unsafe_allow_html=True)
         maq_data = []
         for mq in tpu_data['maq_rows']:
             maq_data.append({
@@ -820,11 +809,11 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
                 "Importe": f"${mq['importe']:,.2f}"
             })
         st.table(pd.DataFrame(maq_data))
-        st.markdown(f"<p style='text-align:right; font-weight:800; margin-top:-10px;'>Total Maquinaria: <b>${tpu_data['costo_maq_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:right; font-size:11.5px; font-weight:800; margin-top:-8px;'>Total Maquinaria: <b>${tpu_data['costo_maq_unitario']:,.2f}</b></p>", unsafe_allow_html=True)
 
     # 3. SELECCIÓN DE REGLA DE CASILLAS (1 SUBIR, 1 BAJAR)
     if not is_read_only:
-        st.markdown("<div style='background:#FFF7ED; border:1px solid #FFEDD5; border-radius:6px; padding:8px 12px; margin:10px 0;'><b>⚡ Regla de Ajuste de Casillas:</b> Selecciona 1 casilla para <b>SUBIR (🟢)</b> y 1 casilla para <b>BAJAR (🔴)</b>.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='background:#FFF7ED; border:1px solid #FFEDD5; border-radius:6px; padding:6px 10px; margin:8px 0; font-size:11px;'><b>⚡ Regla de Ajuste:</b> Selecciona 1 casilla para <b>SUBIR (🟢)</b> y 1 casilla para <b>BAJAR (🔴)</b>.</div>", unsafe_allow_html=True)
         r_c1, r_c2 = st.columns(2)
         with r_c1:
             sel_sube = st.radio("🟢 Casilla seleccionada para SUBIR:", [
@@ -847,11 +836,11 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
             else: st.session_state[f"baja_driver_{pid}"] = "utilidad"
 
     # 4. TABLA MANO DE OBRA Y CONTROLES INLINE
-    st.markdown("##### 👷 Mano de Obra")
+    st.markdown("<p style='font-size:12px; font-weight:800; color:#1E293B; margin:8px 0 4px 0;'>👷 Mano de Obra</p>", unsafe_allow_html=True)
     for o in tpu_data['mo_rows']:
         cm1, cm2, cm3, cm4, cm5 = st.columns([3, 1, 3, 1.5, 1.5])
-        with cm1: st.markdown(f"**{o['puesto']}**")
-        with cm2: st.markdown(f"Cant: **{o['cantidad']}**")
+        with cm1: st.markdown(f"<span style='font-size:11.5px; font-weight:700;'>{o['puesto']}</span>", unsafe_allow_html=True)
+        with cm2: st.markdown(f"<span style='font-size:11px;'>Cant: <b>{o['cantidad']}</b></span>", unsafe_allow_html=True)
         with cm3:
             if not is_read_only and sube_sel == "mo_hh":
                 b1, b2, b3 = st.columns([1, 1, 2])
@@ -865,18 +854,18 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
                         st.rerun()
                 with b3: st.caption(f"Horas: **{o['horas'] * hh_val:.3f}**")
             else:
-                st.markdown(f"Horas: **{o['horas'] * hh_val:.3f}**")
-        with cm4: st.markdown(f"Costo HH: **${o['costo_hh']:,.2f}**")
-        with cm5: st.markdown(f"Importe: **${o['importe'] * hh_val:,.2f}**")
+                st.markdown(f"<span style='font-size:11px;'>Horas: <b>{o['horas'] * hh_val:.3f}</b></span>", unsafe_allow_html=True)
+        with cm4: st.markdown(f"<span style='font-size:11px;'>Costo HH: <b>${o['costo_hh']:,.2f}</b></span>", unsafe_allow_html=True)
+        with cm5: st.markdown(f"<span style='font-size:11px;'>Importe: <b>${o['importe'] * hh_val:,.2f}</b></span>", unsafe_allow_html=True)
 
-    st.markdown(f"<p style='text-align:right; font-weight:800;'>Total Mano de Obra: <b>${c_mo_u:,.2f}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:right; font-size:11.5px; font-weight:800;'>Total Mano de Obra: <b>${c_mo_u:,.2f}</b></p>", unsafe_allow_html=True)
     st.divider()
 
     # 5. HERRAMIENTA Y SUPERVISIÓN
     ch1, ch2, ch3, ch4 = st.columns([2, 3, 2, 2])
     with ch1:
         prefix = "🟢 " if sube_sel == "herramienta" else ""
-        st.markdown(f"**{prefix}Herramienta**")
+        st.markdown(f"<span style='font-size:11.5px; font-weight:700;'>{prefix}Herramienta</span>", unsafe_allow_html=True)
     with ch2:
         if not is_read_only and sube_sel == "herramienta":
             hb1, hb2, hb3 = st.columns([1, 1, 2])
@@ -890,14 +879,14 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
                     st.rerun()
             with hb3: st.markdown(f"**{hta_val:.2f}%**")
         else:
-            st.markdown(f"**{hta_val:.2f}%**")
+            st.markdown(f"<span style='font-size:11px;'><b>{hta_val:.2f}%</b></span>", unsafe_allow_html=True)
     with ch3: st.caption("Factor MO")
-    with ch4: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_hta_u:,.2f}</p>", unsafe_allow_html=True)
+    with ch4: st.markdown(f"<p style='text-align:right; font-size:11px; font-weight:700;'>${m_hta_u:,.2f}</p>", unsafe_allow_html=True)
 
     cs1, cs2, cs3, cs4 = st.columns([2, 3, 2, 2])
     with cs1:
         prefix = "🟢 " if sube_sel == "supervision" else ""
-        st.markdown(f"**{prefix}Supervisión**")
+        st.markdown(f"<span style='font-size:11.5px; font-weight:700;'>{prefix}Supervisión</span>", unsafe_allow_html=True)
     with cs2:
         if not is_read_only and sube_sel == "supervision":
             sb1, sb2, sb3 = st.columns([1, 1, 2])
@@ -911,45 +900,45 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
                     st.rerun()
             with sb3: st.markdown(f"**{sup_val:.2f}%**")
         else:
-            st.markdown(f"**{sup_val:.2f}%**")
+            st.markdown(f"<span style='font-size:11px;'><b>{sup_val:.2f}%</b></span>", unsafe_allow_html=True)
     with cs3: st.caption("Factor MO")
-    with cs4: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_sup_u:,.2f}</p>", unsafe_allow_html=True)
+    with cs4: st.markdown(f"<p style='text-align:right; font-size:11px; font-weight:700;'>${m_sup_u:,.2f}</p>", unsafe_allow_html=True)
 
-    st.markdown(f"<p style='text-align:right; font-weight:800; color:#0F172A; font-size:14px;'>PRECIO UNITARIO MO + FACTORES: <b>${pu_mo_fac:,.2f}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:right; font-weight:800; color:#0F172A; font-size:12px;'>PRECIO UNITARIO MO + FACTORES: <b>${pu_mo_fac:,.2f}</b></p>", unsafe_allow_html=True)
     st.divider()
 
     # 6. COSTO BASE = (MATERIAL + MANO DE OBRA + MAQUINARIA + SUB + GASTOS)
-    st.markdown(f"<p style='font-size:14px; font-weight:800; color:#334155;'>COSTO UNITARIO BASE = (Material + MO + Maquinaria + Sub + Gastos): <b>${costo_base:,.2f}</b></p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px; font-weight:800; color:#334155;'>COSTO UNITARIO BASE: <b>${costo_base:,.2f}</b></p>", unsafe_allow_html=True)
 
     ci1, ci2, ci3 = st.columns([3, 2, 2])
     with ci1:
         tag = "🔴 (BAJA)" if baja_sel == "ind_campo" else ""
-        st.markdown(f"Indirecto de campo ({p_ind_campo:.2f}%) {tag}")
+        st.markdown(f"<span style='font-size:11px;'>Indirecto de campo ({p_ind_campo:.2f}%) {tag}</span>", unsafe_allow_html=True)
     with ci2: st.caption("Compensador Target" if baja_sel == "ind_campo" else "Fijo")
-    with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_ind_campo:,.2f}</p>", unsafe_allow_html=True)
+    with ci3: st.markdown(f"<p style='text-align:right; font-size:11px; font-weight:700;'>${m_ind_campo:,.2f}</p>", unsafe_allow_html=True)
 
     ci1, ci2, ci3 = st.columns([3, 2, 2])
     with ci1:
         tag = "🔴 (BAJA)" if baja_sel == "ind_central" else ""
-        st.markdown(f"Indirecto Central ({p_ind_central:.2f}%) {tag}")
+        st.markdown(f"<span style='font-size:11px;'>Indirecto Central ({p_ind_central:.2f}%) {tag}</span>", unsafe_allow_html=True)
     with ci2: st.caption("Compensador Target" if baja_sel == "ind_central" else "Fijo")
-    with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_ind_central:,.2f}</p>", unsafe_allow_html=True)
+    with ci3: st.markdown(f"<p style='text-align:right; font-size:11px; font-weight:700;'>${m_ind_central:,.2f}</p>", unsafe_allow_html=True)
 
     ci1, ci2, ci3 = st.columns([3, 2, 2])
     with ci1:
         tag = "🔴 (BAJA)" if baja_sel == "utilidad" else ""
-        st.markdown(f"Utilidad ({p_utilidad:.2f}%) {tag}")
+        st.markdown(f"<span style='font-size:11px;'>Utilidad ({p_utilidad:.2f}%) {tag}</span>", unsafe_allow_html=True)
     with ci2: st.caption("Compensador Target" if baja_sel == "utilidad" else "Fijo")
-    with ci3: st.markdown(f"<p style='text-align:right; font-weight:700;'>${m_utilidad:,.2f}</p>", unsafe_allow_html=True)
+    with ci3: st.markdown(f"<p style='text-align:right; font-size:11px; font-weight:700;'>${m_utilidad:,.2f}</p>", unsafe_allow_html=True)
 
     # PRECIO UNITARIO FINAL - VERDE RESALTADO
     st.markdown(f"""
-    <div style="background:#10B981; color:#FFFFFF; padding:12px 16px; border-radius:6px; margin-top:14px;
+    <div style="background:#10B981; color:#FFFFFF; padding:8px 12px; border-radius:6px; margin-top:10px;
                 display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:15px; font-weight:900;">PRECIO UNITARIO FINAL (COINCIDENCIA 100% FIJA)</span>
-        <span style="font-size:18px; font-weight:900;">${precio_final_sim:,.2f}</span>
+        <span style="font-size:12.5px; font-weight:900;">PRECIO UNITARIO FINAL (MATCH 100%)</span>
+        <span style="font-size:14.5px; font-weight:900;">${precio_final_sim:,.2f}</span>
     </div>
-    <p style="text-align:right; font-size:11.5px; font-weight:700; color:#334155; font-style:italic; margin-top:6px;">
+    <p style="text-align:right; font-size:10px; font-weight:700; color:#334155; font-style:italic; margin-top:4px;">
         {letras_sim}
     </p>
     """, unsafe_allow_html=True)
