@@ -627,6 +627,18 @@ def render_tpu_generator():
                     cot_id, pid, g_hta, g_sup, p_campo, p_central, p_util, g_hh
                 ))
 
+                # Forzar actualización en vivo en session_state para TODAS las partidas
+                st.session_state[f"sup_{pid}"] = float(g_sup)
+                st.session_state[f"hta_{pid}"] = float(g_hta)
+                st.session_state[f"hh_{pid}"] = float(g_hh)
+                st.session_state[f"sube_driver_{pid}"] = "supervision"
+                if "Campo" in g_baja:
+                    st.session_state[f"baja_driver_{pid}"] = "ind_campo"
+                elif "Central" in g_baja:
+                    st.session_state[f"baja_driver_{pid}"] = "ind_central"
+                else:
+                    st.session_state[f"baja_driver_{pid}"] = "utilidad"
+
             conn.commit()
             conn.close()
 
@@ -708,23 +720,30 @@ def render_unified_tpu_card_screen(tpu_data, cot_info, p_info, is_read_only=Fals
     """
     pid = tpu_data['partida_id']
 
-    if f"sup_{pid}" not in st.session_state:
-        st.session_state[f"sup_{pid}"] = float(tpu_data['sup_pct'])
-    if f"hta_{pid}" not in st.session_state:
-        st.session_state[f"hta_{pid}"] = float(tpu_data['hta_pct'])
-    if f"hh_{pid}" not in st.session_state:
-        st.session_state[f"hh_{pid}"] = float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0)
+    if is_read_only:
+        sup_val = float(tpu_data['sup_pct'])
+        hta_val = float(tpu_data['hta_pct'])
+        hh_val = float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0)
+        sube_sel = st.session_state.get(f"sube_driver_{pid}", "supervision")
+        baja_sel = st.session_state.get(f"baja_driver_{pid}", "ind_campo")
+    else:
+        if f"sup_{pid}" not in st.session_state:
+            st.session_state[f"sup_{pid}"] = float(tpu_data['sup_pct'])
+        if f"hta_{pid}" not in st.session_state:
+            st.session_state[f"hta_{pid}"] = float(tpu_data['hta_pct'])
+        if f"hh_{pid}" not in st.session_state:
+            st.session_state[f"hh_{pid}"] = float(tpu_data['custom_tpu_dict'].get('horas_hh_factor', 1.0) or 1.0)
 
-    if f"sube_driver_{pid}" not in st.session_state:
-        st.session_state[f"sube_driver_{pid}"] = "supervision"
-    if f"baja_driver_{pid}" not in st.session_state:
-        st.session_state[f"baja_driver_{pid}"] = "ind_campo"
+        if f"sube_driver_{pid}" not in st.session_state:
+            st.session_state[f"sube_driver_{pid}"] = "supervision"
+        if f"baja_driver_{pid}" not in st.session_state:
+            st.session_state[f"baja_driver_{pid}"] = "ind_campo"
 
-    sup_val = st.session_state[f"sup_{pid}"]
-    hta_val = st.session_state[f"hta_{pid}"]
-    hh_val = st.session_state[f"hh_{pid}"]
-    sube_sel = st.session_state[f"sube_driver_{pid}"]
-    baja_sel = st.session_state[f"baja_driver_{pid}"]
+        sup_val = st.session_state[f"sup_{pid}"]
+        hta_val = st.session_state[f"hta_{pid}"]
+        hh_val = st.session_state[f"hh_{pid}"]
+        sube_sel = st.session_state[f"sube_driver_{pid}"]
+        baja_sel = st.session_state[f"baja_driver_{pid}"]
 
     target_price = tpu_data['precio_unitario_target']
 
