@@ -894,7 +894,10 @@ def _generate_correo_eml(cot_info, pdf_bytes, excel_bytes, partidas=None, custom
     part_excel.add_header("Content-Disposition", "attachment", filename=excel_filename)
     msg.attach(part_excel)
 
-    return msg.as_bytes()
+    raw_bytes = msg.as_bytes()
+    if not raw_bytes.startswith(b"X-Unsent: 1"):
+        raw_bytes = b"X-Unsent: 1\r\n" + raw_bytes
+    return raw_bytes
 
 
 def _generate_zip_paquete(cot_info, pdf_bytes, excel_bytes, eml_bytes):
