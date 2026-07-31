@@ -1082,100 +1082,6 @@ def render_cierre_entrega():
     </div>
     """, unsafe_allow_html=True)
 
-def _generate_tpu_pdf_oficial(cot_info, partidas):
-    """
-    Genera un PDF membretado oficial con el desglose de todas las Tarjetas de Precios Unitarios (TPU).
-    """
-    try:
-        from modules.tpu_generator import calcular_tpu_partida
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=letter,
-            leftMargin=36,
-            rightMargin=36,
-            topMargin=54,
-            bottomMargin=54
-        )
-        styles = getSampleStyleSheet()
-        bold_f, reg_f = _get_jd_fonts()
-
-        title_style = ParagraphStyle('TPUTitle', fontName=bold_f, fontSize=13, leading=16, textColor=colors.HexColor('#FE8C29'))
-        normal_style = ParagraphStyle('TPUNormal', fontName=reg_f, fontSize=8.5, leading=11, textColor=colors.HexColor('#0F172A'))
-        header_style = ParagraphStyle('TPUHeader', fontName=bold_f, fontSize=8.5, leading=10, textColor=colors.white, alignment=1)
-
-        story = []
-
-        # Encabezado General
-        story.append(Paragraph("<b>J&D AUTOMATION INDUSTRIES S.A. DE C.V.</b>", title_style))
-        story.append(Paragraph(f"<b>DESGLOSE OFICIAL DE TARJETAS DE PRECIOS UNITARIOS (TPU)</b>", ParagraphStyle('Sub', fontName=bold_f, fontSize=10, textColor=colors.HexColor('#434E62'))))
-        story.append(Paragraph(f"Proyecto: {cot_info.get('proyecto','—')} &bull; Folio: {cot_info.get('folio','—')} &bull; Rev: {cot_info.get('revision','R0')}", normal_style))
-        story.append(Spacer(1, 10))
-
-        for p in partidas:
-            p_id = p['id']
-            conn = get_connection(); cur = conn.cursor()
-            cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (p_id,))
-            mats = [dict(r) for r in cur.fetchall()]
-            cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (p_id,))
-            mo = [dict(r) for r in cur.fetchall()]
-            cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (p_id,))
-            sub = [dict(r) for r in cur.fetchall()]
-            cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (p_id,))
-            maq = [dict(r) for r in cur.fetchall()]
-            conn.close()
-
-            tpu = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
-
-            story.append(Paragraph(f"<b>Partida {tpu['numero_partida']:04d}:</b> {tpu['nombre_partida']}", ParagraphStyle('PHead', fontName=bold_f, fontSize=9.5, textColor=colors.HexColor('#FE8C29'))))
-            story.append(Paragraph(f"Unidad: {tpu['unidad']} | Rendimiento H-H: {tpu['horas_hh_unitarias']:.4f} hrs", normal_style))
-            story.append(Spacer(1, 4))
-
-            # Tabla Materiales
-            mat_table_data = [[Paragraph("<b>Material / Insumo</b>", header_style), Paragraph("<b>Unidad</b>", header_style), Paragraph("<b>Cantidad</b>", header_style), Paragraph("<b>P.U. MXN</b>", header_style), Paragraph("<b>Importe</b>", header_style)]]
-            for m in tpu['mat_rows']:
-                mat_table_data.append([
-                    Paragraph(m['material'], normal_style),
-                    Paragraph(m['unidad'], normal_style),
-                    Paragraph(f"{m['cantidad']:.3f}", normal_style),
-                    Paragraph(f"${m['costo']:,.2f}", normal_style),
-                    Paragraph(f"${m['importe']:,.2f}", normal_style)
-                ])
-            mat_table_data.append([Paragraph("<b>Total Materiales:</b>", ParagraphStyle('R', fontName=bold_f, fontSize=8.5, alignment=2)), "", "", "", Paragraph(f"<b>${tpu['costo_mat_unitario']:,.2f}</b>", ParagraphStyle('R2', fontName=bold_f, fontSize=8.5, alignment=2))])
-
-            t_mat = Table(mat_table_data, colWidths=[240, 50, 60, 80, 80])
-            t_mat.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-                ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
-            ]))
-            story.append(t_mat)
-            story.append(Spacer(1, 6))
-
-            # Resumen Final TPU
-            tot_table_data = [
-                [Paragraph("<b>COSTO UNITARIO BASE</b>", ParagraphStyle('B', fontName=bold_f, fontSize=8.5)), Paragraph(f"<b>${tpu['costo_unitario_base']:,.2f}</b>", ParagraphStyle('BR', fontName=bold_f, fontSize=8.5, alignment=2))],
-                [Paragraph(f"Indirecto de Campo ({tpu['ind_campo_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_ind_campo']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
-                [Paragraph(f"Indirecto Central ({tpu['ind_central_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_ind_central']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
-                [Paragraph(f"Utilidad ({tpu['utilidad_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_utilidad']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
-                [Paragraph("<b>PRECIO UNITARIO FINAL</b>", ParagraphStyle('W', fontName=bold_f, fontSize=9.5, textColor=colors.white)), Paragraph(f"<b>${tpu['precio_unitario_final']:,.2f}</b>", ParagraphStyle('WR', fontName=bold_f, fontSize=9.5, textColor=colors.white, alignment=2))]
-            ]
-            t_tot = Table(tot_table_data, colWidths=[330, 180])
-            t_tot.setStyle(TableStyle([
-                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#10B981')),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-            ]))
-            story.append(t_tot)
-            story.append(Spacer(1, 2))
-            story.append(Paragraph(f"<i>{tpu['monto_letras']}</i>", ParagraphStyle('Lit', fontName=reg_f, fontSize=8, alignment=2, textColor=colors.HexColor('#475569'))))
-            story.append(Spacer(1, 14))
-
-        doc.build(story)
-        return buffer.getvalue()
-    except Exception:
-        return b""
-
-
     # Auto-guardado persistente en estructura de carpetas (cotizaciones_guardadas/{folio}/)
     try:
         from database.storage_manager import save_cotizacion_to_folder
@@ -1210,12 +1116,10 @@ def _generate_tpu_pdf_oficial(cot_info, partidas):
     </style>
     """, unsafe_allow_html=True)
 
-    tpu_pdf_bytes = _generate_tpu_pdf_oficial(cot_info, partidas)
-
-    b_col1, b_col2, b_col3, b_col4 = st.columns([1.5, 1, 1, 1])
+    b_col1, b_col2, b_col3 = st.columns([2, 1, 1])
     with b_col1:
         st.download_button(
-            label="📦 PAQUETE (.ZIP)",
+            label="📦 VALIDAR Y DESCARGAR PAQUETE COMPLETO (.ZIP)",
             data=zip_bytes,
             file_name=f"{clean_folio_fname}_Paquete_Completo_Entrega.zip",
             mime="application/zip",
@@ -1226,7 +1130,7 @@ def _generate_tpu_pdf_oficial(cot_info, partidas):
 
     with b_col2:
         st.download_button(
-            label="📄 COTIZACIÓN (.PDF)",
+            label="📄 DESCARGAR PDF (.PDF)",
             data=pdf_bytes,
             file_name=f"{clean_folio_fname}_Cotizacion_Oficial.pdf",
             mime="application/pdf",
@@ -1235,19 +1139,9 @@ def _generate_tpu_pdf_oficial(cot_info, partidas):
         )
 
     with b_col3:
-        st.download_button(
-            label="🎴 TARJETAS TPU (.PDF)",
-            data=tpu_pdf_bytes if tpu_pdf_bytes else pdf_bytes,
-            file_name=f"{clean_folio_fname}_Tarjetas_Precios_Unitarios.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-            key="btn_download_tpu_pdf_main"
-        )
-
-    with b_col4:
         st.markdown('<div class="btn-correo-azul">', unsafe_allow_html=True)
         st.download_button(
-            label="📬 CORREO (.EML)",
+            label="📬 ✉️ DESCARGAR CORREO (.EML)",
             data=eml_bytes,
             file_name=f"{clean_folio_fname}_Correo_Notificacion.eml",
             mime="message/rfc822",

@@ -15,6 +15,11 @@ from utils.number_to_letters import numero_a_letras_mxn
 from config import (BRAND_ORANGE, BRAND_CHARCOAL, BRAND_CHARCOAL_MED, BRAND_WHITE,
                     BRAND_BORDER_LIGHT, BRAND_GRAY_BG, get_brand_asset_path)
 
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
 
 def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, gastos_partida=0.0):
     """
@@ -84,7 +89,6 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     if sup_pct > 1.0:
         sup_pct = sup_pct / 100.0
 
-    # Herramienta = (Material + MO) * hta_pct o MO * hta_pct
     monto_herramienta_unitario = (costo_mo_unitario + costo_mat_unitario) * hta_pct
     monto_supervision_unitario = costo_mo_unitario * sup_pct
 
@@ -102,7 +106,6 @@ def calcular_tpu_partida(p, cot_info, materiales, mo, subcontratos, maquinaria, 
     ind_central_pct = 0.1200 # 12.00% Indirecto Central
     utilidad_pct = 0.0800    # 8.00% Utilidad
 
-    # Permite tomar los porcentajes comerciales globales si están definidos
     mg_global = float(cot_info.get('margen_porcentaje', 0.30) or 0.30)
     if mg_global > 0:
         utilidad_pct = mg_global * 0.40
@@ -287,6 +290,99 @@ def render_tpu_card_html(tpu_data):
     """
 
 
+def generate_tpu_pdf_oficial(cot_info, partidas):
+    """
+    Genera un PDF membretado oficial con el desglose de todas las Tarjetas de Precios Unitarios (TPU).
+    """
+    try:
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=54,
+            bottomMargin=54
+        )
+        styles = getSampleStyleSheet()
+        bold_f, reg_f = "Helvetica-Bold", "Helvetica"
+
+        title_style = ParagraphStyle('TPUTitle', fontName=bold_f, fontSize=13, leading=16, textColor=colors.HexColor('#FE8C29'))
+        normal_style = ParagraphStyle('TPUNormal', fontName=reg_f, fontSize=8.5, leading=11, textColor=colors.HexColor('#0F172A'))
+        header_style = ParagraphStyle('TPUHeader', fontName=bold_f, fontSize=8.5, leading=10, textColor=colors.white, alignment=1)
+
+        story = []
+
+        # Encabezado General
+        story.append(Paragraph("<b>J&D AUTOMATION INDUSTRIES S.A. DE C.V.</b>", title_style))
+        story.append(Paragraph(f"<b>DESGLOSE OFICIAL DE TARJETAS DE PRECIOS UNITARIOS (TPU)</b>", ParagraphStyle('Sub', fontName=bold_f, fontSize=10, textColor=colors.HexColor('#434E62'))))
+        story.append(Paragraph(f"Proyecto: {cot_info.get('proyecto','—')} &bull; Folio: {cot_info.get('folio','—')} &bull; Rev: {cot_info.get('revision','R0')}", normal_style))
+        story.append(Spacer(1, 10))
+
+        for p in partidas:
+            p_id = p['id']
+            conn = get_connection(); cur = conn.cursor()
+            cur.execute("SELECT * FROM cotizacion_materiales_detalle WHERE partida_id=?", (p_id,))
+            mats = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT * FROM cotizacion_mo_detalle WHERE partida_id=?", (p_id,))
+            mo = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT * FROM cotizacion_subcontratos_detalle WHERE partida_id=?", (p_id,))
+            sub = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT * FROM cotizacion_maquinaria_detalle WHERE partida_id=?", (p_id,))
+            maq = [dict(r) for r in cur.fetchall()]
+            conn.close()
+
+            tpu = calcular_tpu_partida(p, cot_info, mats, mo, sub, maq)
+
+            story.append(Paragraph(f"<b>Partida {tpu['numero_partida']:04d}:</b> {tpu['nombre_partida']}", ParagraphStyle('PHead', fontName=bold_f, fontSize=9.5, textColor=colors.HexColor('#FE8C29'))))
+            story.append(Paragraph(f"Unidad: {tpu['unidad']} | Rendimiento H-H: {tpu['horas_hh_unitarias']:.4f} hrs", normal_style))
+            story.append(Spacer(1, 4))
+
+            # Tabla Materiales
+            mat_table_data = [[Paragraph("<b>Material / Insumo</b>", header_style), Paragraph("<b>Unidad</b>", header_style), Paragraph("<b>Cantidad</b>", header_style), Paragraph("<b>P.U. MXN</b>", header_style), Paragraph("<b>Importe</b>", header_style)]]
+            for m in tpu['mat_rows']:
+                mat_table_data.append([
+                    Paragraph(m['material'], normal_style),
+                    Paragraph(m['unidad'], normal_style),
+                    Paragraph(f"{m['cantidad']:.3f}", normal_style),
+                    Paragraph(f"${m['costo']:,.2f}", normal_style),
+                    Paragraph(f"${m['importe']:,.2f}", normal_style)
+                ])
+            mat_table_data.append([Paragraph("<b>Total Materiales:</b>", ParagraphStyle('R', fontName=bold_f, fontSize=8.5, alignment=2)), "", "", "", Paragraph(f"<b>${tpu['costo_mat_unitario']:,.2f}</b>", ParagraphStyle('R2', fontName=bold_f, fontSize=8.5, alignment=2))])
+
+            t_mat = Table(mat_table_data, colWidths=[240, 50, 60, 80, 80])
+            t_mat.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E293B')),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
+                ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
+            ]))
+            story.append(t_mat)
+            story.append(Spacer(1, 6))
+
+            # Resumen Final TPU
+            tot_table_data = [
+                [Paragraph("<b>COSTO UNITARIO BASE</b>", ParagraphStyle('B', fontName=bold_f, fontSize=8.5)), Paragraph(f"<b>${tpu['costo_unitario_base']:,.2f}</b>", ParagraphStyle('BR', fontName=bold_f, fontSize=8.5, alignment=2))],
+                [Paragraph(f"Indirecto de Campo ({tpu['ind_campo_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_ind_campo']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
+                [Paragraph(f"Indirecto Central ({tpu['ind_central_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_ind_central']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
+                [Paragraph(f"Utilidad ({tpu['utilidad_pct']:.2f}%)", normal_style), Paragraph(f"${tpu['monto_utilidad']:,.2f}", ParagraphStyle('R', fontName=reg_f, fontSize=8.5, alignment=2))],
+                [Paragraph("<b>PRECIO UNITARIO FINAL</b>", ParagraphStyle('W', fontName=bold_f, fontSize=9.5, textColor=colors.white)), Paragraph(f"<b>${tpu['precio_unitario_final']:,.2f}</b>", ParagraphStyle('WR', fontName=bold_f, fontSize=9.5, textColor=colors.white, alignment=2))]
+            ]
+            t_tot = Table(tot_table_data, colWidths=[330, 180])
+            t_tot.setStyle(TableStyle([
+                ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#10B981')),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
+            ]))
+            story.append(t_tot)
+            story.append(Spacer(1, 2))
+            story.append(Paragraph(f"<i>{tpu['monto_letras']}</i>", ParagraphStyle('Lit', fontName=reg_f, fontSize=8, alignment=2, textColor=colors.HexColor('#475569'))))
+            story.append(Spacer(1, 14))
+
+        doc.build(story)
+        return buffer.getvalue()
+    except Exception:
+        return b""
+
+
 def render_tpu_generator():
     """
     Renderiza la interfaz interactiva de Tarjetas de Precios Unitarios (TPU).
@@ -331,6 +427,21 @@ def render_tpu_generator():
     if not partidas:
         st.info("La cotización seleccionada no tiene partidas registradas aún.")
         return
+
+    # Botón de Descarga Oficial de TPU en PDF dentro del Módulo 6
+    clean_f = re.sub(r'[^a-zA-Z0-9_-]', '_', cot_info.get('folio', 'COT-001')).strip('_')
+    tpu_pdf_bytes = generate_tpu_pdf_oficial(cot_info, partidas)
+    if tpu_pdf_bytes:
+        st.download_button(
+            label="🎴 DESCARGAR TARJETAS DE PRECIOS UNITARIOS (.PDF)",
+            data=tpu_pdf_bytes,
+            file_name=f"{clean_f}_Tarjetas_Precios_Unitarios.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True
+        )
+
+    st.divider()
 
     partida_opts = {f"Partida {p['numero_partida']:04d}: {p['descripcion'][:50]}": p['id'] for p in partidas}
     partida_opts["🌟 TODAS LAS PARTIDAS (REPORTE CONSOLIDADO DE TPU)"] = "ALL"
