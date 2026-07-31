@@ -282,40 +282,48 @@ CUSTOM_CSS = f"""
     .stWidget label,
     .stWidget label p {
         color: #1E293B !important;
-        font-weight: 700 !important;
-        font-size: 13px !important;
+        font-weight: 800 !important;
+        font-size: 13.5px !important;
     }
 
-    /* Inputs, Number Inputs, Text Areas y Selectboxes - FORZAR FONDO BLANCO Y TEXTO NEGRO GRUESO */
+    /* FORZAR FONDO BLANCO Y TEXTO NEGRO VISIBLE EN TODOS LOS NIVELES DE INPUTS Y SELECTBOXES */
+    [data-testid="stNumberInput"] div,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stNumberInput"] span,
+    [data-testid="stSelectbox"] div,
+    [data-testid="stSelectbox"] span,
+    [data-testid="stSelectbox"] input,
+    [data-testid="stTextInput"] div,
+    [data-testid="stTextInput"] input,
+    [data-testid="stTextInput"] span,
     div[data-baseweb="input"],
+    div[data-baseweb="input"] div,
+    div[data-baseweb="input"] input,
+    div[data-baseweb="input"] span,
     div[data-baseweb="select"],
-    div[data-baseweb="select"] > div,
-    div[data-baseweb="base-input"],
-    div[data-testid="stNumberInputContainer"],
-    div[data-testid="stNumberInput"] input,
-    div[data-testid="stTextInput"] input,
-    div[data-testid="stTextArea"] textarea,
-    div[data-testid="stSelectbox"] div[data-baseweb="select"],
-    textarea,
-    input {
+    div[data-baseweb="select"] div,
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] input {
         background-color: #FFFFFF !important;
         color: #0F172A !important;
         -webkit-text-fill-color: #0F172A !important;
         font-weight: 700 !important;
         font-size: 13.5px !important;
-        border: 1.5px solid #94A3B8 !important;
-        border-radius: 6px !important;
     }
 
-    /* Texto seleccionado y spans dentro de Selectbox e Inputs */
-    div[data-baseweb="select"] span,
-    div[data-baseweb="select"] div,
-    div[data-baseweb="select"] input,
-    div[data-baseweb="input"] input,
-    div[data-baseweb="base-input"] input {
+    div[data-baseweb="input"],
+    div[data-baseweb="select"],
+    div[data-testid="stNumberInputContainer"] {
+        border: 1.5px solid #94A3B8 !important;
+        border-radius: 6px !important;
+        background-color: #FFFFFF !important;
+    }
+
+    button[data-testid="stNumberInputStepDown"],
+    button[data-testid="stNumberInputStepUp"] {
+        background-color: #E2E8F0 !important;
         color: #0F172A !important;
-        -webkit-text-fill-color: #0F172A !important;
-        font-weight: 700 !important;
+        border: 1px solid #CBD5E1 !important;
     }
 
     /* Menú desplegable de opciones en Selectbox (Pop-over) */

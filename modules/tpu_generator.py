@@ -426,6 +426,44 @@ def render_tpu_generator():
     idéntica a la pantalla solicitada por el usuario con controles [-] [+] e integrando Maquinaria.
     Soporta Ajuste Individual por Partida y Ajuste Global Masivo (Todas las Partidas a la vez).
     """
+    st.markdown("""
+    <style>
+    /* FORZAR LEGIBILIDAD ABSOLUTA EN INPUTS Y SELECTBOXES */
+    div[data-testid="stNumberInput"] div,
+    div[data-testid="stNumberInput"] input,
+    div[data-testid="stNumberInput"] span,
+    div[data-testid="stSelectbox"] div,
+    div[data-testid="stSelectbox"] span,
+    div[data-testid="stSelectbox"] input,
+    div[data-baseweb="input"],
+    div[data-baseweb="input"] div,
+    div[data-baseweb="input"] input,
+    div[data-baseweb="select"],
+    div[data-baseweb="select"] div,
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] input {
+        background-color: #FFFFFF !important;
+        background: #FFFFFF !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        font-weight: 800 !important;
+        font-size: 14px !important;
+    }
+    div[data-baseweb="input"],
+    div[data-baseweb="select"],
+    div[data-testid="stNumberInputContainer"] {
+        border: 2px solid #64748B !important;
+        border-radius: 6px !important;
+        background-color: #FFFFFF !important;
+    }
+    button[data-testid="stNumberInputStepDown"],
+    button[data-testid="stNumberInputStepUp"] {
+        background-color: #CBD5E1 !important;
+        color: #0F172A !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown(f"""
     <div style="background:{BRAND_WHITE}; border:1px solid {BRAND_BORDER_LIGHT}; border-left:5px solid {BRAND_ORANGE};
                 border-radius:8px; padding:16px 20px; margin-bottom:18px;">
